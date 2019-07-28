@@ -114,9 +114,6 @@ PCSTR GetSidNameUseName(SID_NAME_USE snu)
 {
 	switch (snu)
 	{
-#pragma warning(disable : 4063 )
-	case 0: return "";
-#pragma warning(default : 4063 )
 	case SidTypeUser: return "User";
 	case SidTypeGroup: return "Group";
 	case SidTypeDomain: return "Domain";
