@@ -9,6 +9,17 @@ class WLog
 {
 	PVOID _BaseAddress;
 	ULONG _RegionSize, _Ptr;
+
+	PWSTR _buf()
+	{
+		return (PWSTR)((PBYTE)_BaseAddress + _Ptr);
+	}
+
+	ULONG _cch()
+	{
+		return (_RegionSize - _Ptr) / sizeof(WCHAR);
+	}
+
 public:
 	ULONG Init(SIZE_T RegionSize)
 	{
@@ -42,70 +53,34 @@ public:
 		va_list args;
 		va_start(args, format);
 
-		int len = _vscwprintf(format, args);
+		int len = _vsnwprintf_s(_buf(), _cch(), _TRUNCATE, format, args);
 
 		if (0 < len)
 		{
-			ULONG Size = _Ptr + (len + 1) * sizeof(WCHAR);
-
-			if (Size <= _RegionSize)
-			{
-				len = _vsnwprintf_s((PWSTR)((PBYTE)_BaseAddress + _Ptr), 
-					(_RegionSize - _Ptr) / sizeof(WCHAR), _TRUNCATE, format, args);
-
-				if (0 < len)
-				{
-					_Ptr += len * sizeof(WCHAR);
-				}
-			}
+			_Ptr += len * sizeof(WCHAR);
 		}
+
+		va_end(args);
 
 		return *this;
 	}
 
-	//WLog& operator[](HRESULT dwError)
-	//{
-	//	PWSTR MsgBuffer;
-
-	//	ULONG r = dwError & FACILITY_NT_BIT ?
-	//		FormatMessage(FORMAT_MESSAGE_IGNORE_INSERTS|FORMAT_MESSAGE_ALLOCATE_BUFFER |
-	//		FORMAT_MESSAGE_FROM_HMODULE, GetModuleHandle(L"ntdll"), 
-	//		dwError &= ~FACILITY_NT_BIT, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-	//		(PWSTR)&MsgBuffer, 0, NULL) :
-	//	FormatMessage(FORMAT_MESSAGE_IGNORE_INSERTS|FORMAT_MESSAGE_ALLOCATE_BUFFER |
-	//		FORMAT_MESSAGE_FROM_SYSTEM, 0, dwError,
-	//		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-	//		(PWSTR)&MsgBuffer, 0, NULL);
-
-	//	if (r)
-	//	{
-	//		operator ()(MsgBuffer);
-	//		LocalFree(MsgBuffer);
-	//	}
-	//	return *this;
-	//}
-
-	WLog& operator[](NTSTATUS status)
+	WLog& operator[](HRESULT dwError)
 	{
-		if (status)
+		LPCVOID lpSource = 0;
+		ULONG dwFlags = FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS;
+
+		if (dwError & FACILITY_NT_BIT)
 		{
-			PWSTR MsgBuffer;
+			dwError &= ~FACILITY_NT_BIT;
+			dwFlags = FORMAT_MESSAGE_FROM_HMODULE|FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_IGNORE_INSERTS;
 
-			static HMODULE hNT;
-
-			if (!hNT)
-			{
-				hNT = GetModuleHandle(L"ntdll");
-			}
-
-			if (ULONG r = FormatMessage(FORMAT_MESSAGE_IGNORE_INSERTS|FORMAT_MESSAGE_ALLOCATE_BUFFER |
-				FORMAT_MESSAGE_FROM_HMODULE, hNT, status, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-				(PWSTR)&MsgBuffer, 0, NULL))
-			{
-				operator ()(MsgBuffer);
-				LocalFree(MsgBuffer);
-			}
+			static HMODULE ghnt;
+			if (!ghnt && !(ghnt = GetModuleHandle(L"ntdll"))) return *this;
+			lpSource = ghnt;
 		}
+
+		FormatMessageW(dwFlags, lpSource, dwError, 0, _buf(), _cch(), 0);
 		return *this;
 	}
 };
