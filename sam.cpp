@@ -140,6 +140,7 @@ void DisplayAliases(WLog& log, SAM_HANDLE DomainHandle)
 					log(L"\t\t\t<%08x '%wZ' />\r\n", psre->RelativeId, &psre->Name);
 				} while (psre++, --CountReturned);
 			}
+			SamFreeMemory(Buffer);
 		}
 		else
 		{
