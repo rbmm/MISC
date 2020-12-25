@@ -7,558 +7,575 @@ _NT_BEGIN
 
 class WLog
 {
-  PVOID _BaseAddress;
-  ULONG _RegionSize, _Ptr;
+	PVOID _BaseAddress;
+	ULONG _RegionSize, _Ptr;
 
-  PWSTR _buf()
-  {
-    return (PWSTR)((PBYTE)_BaseAddress + _Ptr);
-  }
+	PWSTR _buf()
+	{
+		return (PWSTR)((PBYTE)_BaseAddress + _Ptr);
+	}
 
-  ULONG _cch()
-  {
-    return (_RegionSize - _Ptr) / sizeof(WCHAR);
-  }
+	ULONG _cch()
+	{
+		return (_RegionSize - _Ptr) / sizeof(WCHAR);
+	}
 
 public:
-  ULONG Init(SIZE_T RegionSize)
-  {
-    if (_BaseAddress = new BYTE[RegionSize])
-    {
-      _RegionSize = (ULONG)RegionSize, _Ptr = 0;
-      return NOERROR;
-    }
-    return GetLastError();
-  }
-
-  ~WLog()
-  {
-    if (_BaseAddress)
-    {
-      delete [] _BaseAddress;
-    }
-  }
-
-  WLog(WLog&&) = delete;
-  WLog(WLog&) = delete;
-  WLog(): _BaseAddress(0) {  }
-
-  operator PCWSTR()
-  {
-    return (PCWSTR)_BaseAddress;
-  }
-
-  WLog& operator ()(PCWSTR format, ...)
-  {
-    va_list args;
-    va_start(args, format);
-
-    int len = _vsnwprintf_s(_buf(), _cch(), _TRUNCATE, format, args);
-
-    if (0 < len)
-    {
-      _Ptr += len * sizeof(WCHAR);
-    }
-
-    va_end(args);
-
-    return *this;
-  }
-
-  WLog& operator[](HRESULT dwError)
-  {
-    LPCVOID lpSource = 0;
-    ULONG dwFlags = FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS;
-
-    if (dwError & FACILITY_NT_BIT)
-    {
-      dwError &= ~FACILITY_NT_BIT;
-      dwFlags = FORMAT_MESSAGE_FROM_HMODULE|FORMAT_MESSAGE_IGNORE_INSERTS;
-
-      static HMODULE ghnt;
-      if (!ghnt && !(ghnt = GetModuleHandle(L"ntdll"))) return *this;
-      lpSource = ghnt;
-    }
-
-	if (dwFlags = FormatMessageW(dwFlags, lpSource, dwError, 0, _buf(), _cch(), 0))
+	void operator >> (HWND hwnd)
 	{
-		_Ptr += dwFlags * sizeof(WCHAR);
+		PVOID pv = (PVOID)SendMessage(hwnd, EM_GETHANDLE, 0, 0);
+		SendMessage(hwnd, EM_SETHANDLE, (WPARAM)_BaseAddress, 0);
+		_BaseAddress = 0;
+		if (pv)
+		{
+			LocalFree(pv);
+		}
 	}
-    return *this;
-  }
+
+	ULONG Init(SIZE_T RegionSize)
+	{
+		if (_BaseAddress = LocalAlloc(0, RegionSize))
+		{
+			_RegionSize = (ULONG)RegionSize, _Ptr = 0;
+			return NOERROR;
+		}
+		return GetLastError();
+	}
+
+	~WLog()
+	{
+		if (_BaseAddress)
+		{
+			LocalFree(_BaseAddress);
+		}
+	}
+
+	WLog(WLog&&) = delete;
+	WLog(WLog&) = delete;
+	WLog(): _BaseAddress(0) {  }
+
+	operator PCWSTR()
+	{
+		return (PCWSTR)_BaseAddress;
+	}
+
+	WLog& operator ()(PCWSTR format, ...)
+	{
+		va_list args;
+		va_start(args, format);
+
+		int len = _vsnwprintf_s(_buf(), _cch(), _TRUNCATE, format, args);
+
+		if (0 < len)
+		{
+			_Ptr += len * sizeof(WCHAR);
+		}
+
+		va_end(args);
+
+		return *this;
+	}
+
+	WLog& operator[](HRESULT dwError)
+	{
+		LPCVOID lpSource = 0;
+		ULONG dwFlags = FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS;
+
+		if (dwError & FACILITY_NT_BIT)
+		{
+			dwError &= ~FACILITY_NT_BIT;
+			dwFlags = FORMAT_MESSAGE_FROM_HMODULE|FORMAT_MESSAGE_IGNORE_INSERTS;
+
+			static HMODULE ghnt;
+			if (!ghnt && !(ghnt = GetModuleHandle(L"ntdll"))) return *this;
+			lpSource = ghnt;
+		}
+
+		if (dwFlags = FormatMessageW(dwFlags, lpSource, dwError, 0, _buf(), _cch(), 0))
+		{
+			_Ptr += dwFlags * sizeof(WCHAR);
+		}
+		return *this;
+	}
 };
 
 PCSTR GetSidNameUseName(SID_NAME_USE snu)
 {
-  switch (snu)
-  {
-  case SidTypeUser: return "User";
-  case SidTypeGroup: return "Group";
-  case SidTypeDomain: return "Domain";
-  case SidTypeAlias: return "Alias";
-  case SidTypeWellKnownGroup: return "WellKnownGroup";
-  case SidTypeDeletedAccount: return "DeletedAccount";
-  case SidTypeInvalid: return "Invalid";
-  case SidTypeUnknown: return "Unknown";
-  case SidTypeComputer: return "Computer";
-  case SidTypeLabel: return "Label";
-  case SidTypeLogonSession: return "LogonSession";
-  }
-  return "?";
+	switch (snu)
+	{
+	case SidTypeUser: return "User";
+	case SidTypeGroup: return "Group";
+	case SidTypeDomain: return "Domain";
+	case SidTypeAlias: return "Alias";
+	case SidTypeWellKnownGroup: return "WellKnownGroup";
+	case SidTypeDeletedAccount: return "DeletedAccount";
+	case SidTypeInvalid: return "Invalid";
+	case SidTypeUnknown: return "Unknown";
+	case SidTypeComputer: return "Computer";
+	case SidTypeLabel: return "Label";
+	case SidTypeLogonSession: return "LogonSession";
+	}
+	return "?";
 }
 
 void DumpSid(WLog& log, PSID Sid)
 {
-  UNICODE_STRING StringSid;
-  if (0 <= RtlConvertSidToUnicodeString(&StringSid, Sid, TRUE))
-  {
-    log(L"%wZ", &StringSid);
-    RtlFreeUnicodeString(&StringSid);
-  }
+	UNICODE_STRING StringSid;
+	if (0 <= RtlConvertSidToUnicodeString(&StringSid, Sid, TRUE))
+	{
+		log(L"%wZ", &StringSid);
+		RtlFreeUnicodeString(&StringSid);
+	}
 }
 
 void DisplayAliases(WLog& log, SAM_HANDLE DomainHandle)
 {
-  log(L"\t\t<Aliases>\r\n");
-  NTSTATUS status;
-  ULONG CountReturned;
-  SAM_ENUMERATE_HANDLE EnumerationContext = 0;
-  PVOID Buffer;
+	log(L"\t\t<Aliases>\r\n");
+	NTSTATUS status;
+	ULONG CountReturned;
+	SAM_ENUMERATE_HANDLE EnumerationContext = 0;
+	PVOID Buffer;
 
-  do 
-  {
-    if (0 <= (status = SamEnumerateAliasesInDomain(
-      DomainHandle,
-      &EnumerationContext,
-      &Buffer, // 
-      0x10000,
-      &CountReturned
-      )))
-    {
-      if (CountReturned)
-      {
-        PSAM_RID_ENUMERATION psre = (PSAM_RID_ENUMERATION)Buffer;
-        do 
-        {
-          log(L"\t\t\t<%08x '%wZ' />\r\n", psre->RelativeId, &psre->Name);
-        } while (psre++, --CountReturned);
-      }
-      SamFreeMemory(Buffer);
-    }
-    else
-    {
-      log(L"!!! EnumerateAliasesInDomain = %x\r\n", status)[status];
-    }
-  } while (status == STATUS_MORE_ENTRIES);
-  log(L"\t\t</Aliases>\r\n");
+	do 
+	{
+		if (0 <= (status = SamEnumerateAliasesInDomain(
+			DomainHandle,
+			&EnumerationContext,
+			&Buffer, // 
+			0x10000,
+			&CountReturned
+			)))
+		{
+			if (CountReturned)
+			{
+				PSAM_RID_ENUMERATION psre = (PSAM_RID_ENUMERATION)Buffer;
+				do 
+				{
+					log(L"\t\t\t<%08x '%wZ' />\r\n", psre->RelativeId, &psre->Name);
+				} while (psre++, --CountReturned);
+			}
+			SamFreeMemory(Buffer);
+		}
+		else
+		{
+			log(L"!!! EnumerateAliasesInDomain = %x\r\n", status)[status];
+		}
+	} while (status == STATUS_MORE_ENTRIES);
+	log(L"\t\t</Aliases>\r\n");
 }
 
 void DisplayGroups(WLog& log, SAM_HANDLE DomainHandle)
 {
-  log(L"\t\t<Groups>\r\n");
-  NTSTATUS status;
-  ULONG Index = 0, TotalAvailable, TotalReturned, ReturnedEntryCount;
+	log(L"\t\t<Groups>\r\n");
+	NTSTATUS status;
+	ULONG Index = 0, TotalAvailable, TotalReturned, ReturnedEntryCount;
 
-  do 
-  {
-    PVOID Buffer;
-    if (0 <= (status = SamQueryDisplayInformation(DomainHandle, DomainDisplayGroup, 
-      Index, 0x40, 0x10000, &TotalAvailable, &TotalReturned, &ReturnedEntryCount, &Buffer)))
-    {
-      if (ReturnedEntryCount)
-      {
-        PDOMAIN_DISPLAY_GROUP pdg = (PDOMAIN_DISPLAY_GROUP)Buffer;
-        do 
-        {
-          log(L"\t\t\n<%08x '[%08x]' '%wZ' '%wZ' />\r\n", pdg->Rid, pdg->Attributes, &pdg->Group, &pdg->Comment);
+	do 
+	{
+		PVOID Buffer;
+		if (0 <= (status = SamQueryDisplayInformation(DomainHandle, DomainDisplayGroup, 
+			Index, 0x40, 0x10000, &TotalAvailable, &TotalReturned, &ReturnedEntryCount, &Buffer)))
+		{
+			if (ReturnedEntryCount)
+			{
+				PDOMAIN_DISPLAY_GROUP pdg = (PDOMAIN_DISPLAY_GROUP)Buffer;
+				do 
+				{
+					log(L"\t\t\n<%08x '[%08x]' '%wZ' '%wZ' />\r\n", pdg->Rid, pdg->Attributes, &pdg->Group, &pdg->Comment);
 
-          Index = pdg->Index;
+					Index = pdg->Index;
 
-        } while (pdg++, --ReturnedEntryCount);
-      }
-      SamFreeMemory(Buffer);
-    }
-    else
-    {
-      log(L"!!! DomainDisplayGroup = %x\r\n", status)[status];
-    }
+				} while (pdg++, --ReturnedEntryCount);
+			}
+			SamFreeMemory(Buffer);
+		}
+		else
+		{
+			log(L"!!! DomainDisplayGroup = %x\r\n", status)[status];
+		}
 
-  } while (status == STATUS_MORE_ENTRIES);
-  log(L"\t\t</Groups>\r\n");
+	} while (status == STATUS_MORE_ENTRIES);
+	log(L"\t\t</Groups>\r\n");
 }
 
 void DisplayUsers(WLog& log, SAM_HANDLE DomainHandle)
 {
-  log(L"\t\t<Users>\r\n");
-  NTSTATUS status;
-  ULONG Index = 0, TotalAvailable, TotalReturned, ReturnedEntryCount;
+	log(L"\t\t<Users>\r\n");
+	NTSTATUS status;
+	ULONG Index = 0, TotalAvailable, TotalReturned, ReturnedEntryCount;
 
-  do 
-  {
-    PVOID Buffer;
-    if (0 <= (status = SamQueryDisplayInformation(DomainHandle, DomainDisplayUser, 
-      Index, 0x40, 0x10000, &TotalAvailable, &TotalReturned, &ReturnedEntryCount, &Buffer)))
-    {
-      if (ReturnedEntryCount)
-      {
-        PDOMAIN_DISPLAY_USER pdu = (PDOMAIN_DISPLAY_USER)Buffer;
-        do 
-        {
-          log(L"\t\t\t<%08x '[%08x]' '%wZ' '%wZ' />\r\n", pdu->Rid, pdu->AccountControl, &pdu->LogonName, &pdu->FullName);
+	do 
+	{
+		PVOID Buffer;
+		if (0 <= (status = SamQueryDisplayInformation(DomainHandle, DomainDisplayUser, 
+			Index, 0x40, 0x10000, &TotalAvailable, &TotalReturned, &ReturnedEntryCount, &Buffer)))
+		{
+			if (ReturnedEntryCount)
+			{
+				PDOMAIN_DISPLAY_USER pdu = (PDOMAIN_DISPLAY_USER)Buffer;
+				do 
+				{
+					log(L"\t\t\t<%08x '[%08x]' '%wZ' '%wZ' />\r\n", pdu->Rid, pdu->AccountControl, &pdu->LogonName, &pdu->FullName);
 
-          Index = pdu->Index;
+					Index = pdu->Index;
 
-        } while (pdu++, --ReturnedEntryCount);
-      }
-      SamFreeMemory(Buffer);
-    }
-    else
-    {
-      log(L"!!! DisplayUsers = %x\r\n", status)[status];
-    }
+				} while (pdu++, --ReturnedEntryCount);
+			}
+			SamFreeMemory(Buffer);
+		}
+		else
+		{
+			log(L"!!! DisplayUsers = %x\r\n", status)[status];
+		}
 
-  } while (status == STATUS_MORE_ENTRIES);
-  log(L"\t\t</Users>\r\n");
+	} while (status == STATUS_MORE_ENTRIES);
+	log(L"\t\t</Users>\r\n");
 }
 
 NTSTATUS QueryUser(WLog& log, SAM_HANDLE DomainHandle, ULONG UserId)
 {
-  SAM_HANDLE UserHandle, GroupHandle;
+	SAM_HANDLE UserHandle, GroupHandle;
 
-  NTSTATUS status = SamOpenUser(DomainHandle, USER_READ, UserId, &UserHandle);
+	NTSTATUS status = SamOpenUser(DomainHandle, USER_ALL_ACCESS, UserId, &UserHandle);
 
-  if (0 <= status)
-  {
-    ULONG MembershipCount;
+	if (0 <= status)
+	{
+		//
+		PUSER_ALL_INFORMATION puai;
+		SamQueryInformationUser(UserHandle, UserAllInformation, (void**)&puai);
+		SamFreeMemory(puai);
 
-    PGROUP_MEMBERSHIP Groups;
+		//
+		ULONG MembershipCount;
 
-    status = SamGetGroupsForUser(UserHandle, &Groups, &MembershipCount);
+		PGROUP_MEMBERSHIP Groups;
 
-    if (0 <= status)
-    {
-      log(L"\t\t<GroupsForUser>\r\n");
+		status = SamGetGroupsForUser(UserHandle, &Groups, &MembershipCount);
 
-      PVOID buf = Groups;
+		if (0 <= status)
+		{
+			log(L"\t\t<GroupsForUser>\r\n");
 
-      if (MembershipCount)
-      {
-        do 
-        {
-          status = SamOpenGroup(DomainHandle, GROUP_READ|GROUP_EXECUTE, Groups->RelativeId, &GroupHandle);
-          
-          if (0 <= status)
-          {
-            PGROUP_NAME_INFORMATION GroupName;
-            
-            status = SamQueryInformationGroup(GroupHandle, GroupNameInformation, (void**)&GroupName);
-            
-            if (0 <= status)
-            {
-              log(L"\t\t\t<%08x '[%08x]' '%wZ' />\r\n", Groups->RelativeId, Groups->Attributes, GroupName);
-              SamFreeMemory(GroupName);
-            }
-            else
-            {
-              log(L"!!! GroupNameInformation = %x\r\n", status)[status];
-            }
-            SamCloseHandle(GroupHandle);
-          }
-          else
-          {
-            log(L"!!! OpenGroup(%08x) = %x\r\n", Groups->RelativeId, status)[status];
-          }
+			PVOID buf = Groups;
 
-        } while (Groups++, --MembershipCount);
-      }
+			if (MembershipCount)
+			{
+				do 
+				{
+					status = SamOpenGroup(DomainHandle, GROUP_READ|GROUP_EXECUTE, Groups->RelativeId, &GroupHandle);
 
-      SamFreeMemory(buf);
-      log(L"\t\t</GroupsForUser>\r\n");
-    }
-    else
-    {
-      log(L"GetGroupsForUser(%08x) = %x\r\n", UserId, status)[status];
-    }
+					if (0 <= status)
+					{
+						PGROUP_NAME_INFORMATION GroupName;
 
-    SamCloseHandle(UserHandle);
-  }
-  else
-  {
-    log(L"OpenUser(%08x) = %x\r\n", UserId, status)[status];
-  }
+						status = SamQueryInformationGroup(GroupHandle, GroupNameInformation, (void**)&GroupName);
 
-  return status;
+						if (0 <= status)
+						{
+							log(L"\t\t\t<%08x '[%08x]' '%wZ' />\r\n", Groups->RelativeId, Groups->Attributes, GroupName);
+							SamFreeMemory(GroupName);
+						}
+						else
+						{
+							log(L"!!! GroupNameInformation = %x\r\n", status)[status];
+						}
+						SamCloseHandle(GroupHandle);
+					}
+					else
+					{
+						log(L"!!! OpenGroup(%08x) = %x\r\n", Groups->RelativeId, status)[status];
+					}
+
+				} while (Groups++, --MembershipCount);
+			}
+
+			SamFreeMemory(buf);
+			log(L"\t\t</GroupsForUser>\r\n");
+		}
+		else
+		{
+			log(L"GetGroupsForUser(%08x) = %x\r\n", UserId, status)[status];
+		}
+
+		SamCloseHandle(UserHandle);
+	}
+	else
+	{
+		log(L"OpenUser(%08x) = %x\r\n", UserId, status)[status];
+	}
+
+	return status;
 }
 
 NTSTATUS QuerySam(WLog& log, PUNICODE_STRING ServerName, PUNICODE_STRING DomainName, PUNICODE_STRING UserName)
 {
-  SAM_HANDLE ServerHandle, DomainHandle;
+	SAM_HANDLE ServerHandle, DomainHandle;
 
-  NTSTATUS status = SamConnect(ServerName, &ServerHandle, SAM_SERVER_ENUMERATE_DOMAINS|SAM_SERVER_LOOKUP_DOMAIN, 0);
+	NTSTATUS status = SamConnect(ServerName, &ServerHandle, SAM_SERVER_ENUMERATE_DOMAINS|SAM_SERVER_LOOKUP_DOMAIN, 0);
 
-  if (0 <= status)
-  {
-    log(L"<Server '%wZ'>\r\n", ServerName);
+	if (0 <= status)
+	{
+		log(L"<Server '%wZ'>\r\n", ServerName);
 
-    PSID DomainSid;
+		PSID DomainSid;
 
-    status = SamLookupDomainInSamServer(ServerHandle, DomainName, &DomainSid);
+		status = SamLookupDomainInSamServer(ServerHandle, DomainName, &DomainSid);
 
-    if (0 <= status)
-    {
-      log(L"\tDomainSid=");
-      DumpSid(log, DomainSid);
-      log(L"\r\n");
+		if (0 <= status)
+		{
+			log(L"\tDomainSid=");
+			DumpSid(log, DomainSid);
+			log(L"\r\n");
 
-      status = SamOpenDomain(ServerHandle, DOMAIN_READ|DOMAIN_EXECUTE, DomainSid, &DomainHandle);
+			status = SamOpenDomain(ServerHandle, DOMAIN_READ|DOMAIN_EXECUTE, DomainSid, &DomainHandle);
 
-      UCHAR SubAuthorityCount = *RtlSubAuthorityCountSid(DomainSid);
-      ULONG DestinationSidLength = RtlLengthRequiredSid(SubAuthorityCount + 1);
+			UCHAR SubAuthorityCount = *RtlSubAuthorityCountSid(DomainSid);
+			ULONG DestinationSidLength = RtlLengthRequiredSid(SubAuthorityCount + 1);
 
-      PSID UserSid = alloca(DestinationSidLength);
-      RtlCopySid(DestinationSidLength, UserSid, DomainSid);
-      ++*RtlSubAuthorityCountSid(UserSid);
-      PULONG pUserRid = RtlSubAuthoritySid(UserSid, SubAuthorityCount);
+			PSID UserSid = alloca(DestinationSidLength);
+			RtlCopySid(DestinationSidLength, UserSid, DomainSid);
+			++*RtlSubAuthorityCountSid(UserSid);
+			PULONG pUserRid = RtlSubAuthoritySid(UserSid, SubAuthorityCount);
 
-      SamFreeMemory(DomainSid);
+			SamFreeMemory(DomainSid);
 
-      if (0 <= status)
-      {
-        log(L"\t<Domain '%wZ'>\r\n", DomainName);
+			if (0 <= status)
+			{
+				log(L"\t<Domain '%wZ'>\r\n", DomainName);
 
-        DisplayAliases(log, DomainHandle);
-        DisplayGroups(log, DomainHandle);
-        DisplayUsers(log, DomainHandle);
+				DisplayAliases(log, DomainHandle);
+				DisplayGroups(log, DomainHandle);
+				DisplayUsers(log, DomainHandle);
 
-        SID_NAME_USE *pUse, Use;
-        ULONG UserId, *UserRid;
+				SID_NAME_USE *pUse, Use;
+				ULONG UserId, *UserRid;
 
-        status = SamLookupNamesInDomain(DomainHandle, 1, UserName, &UserRid, &pUse);
+				status = SamLookupNamesInDomain(DomainHandle, 1, UserName, &UserRid, &pUse);
 
-        log(L"\t<!-- Lookup(%wZ) -->\r\n", UserName);
+				log(L"\t<!-- Lookup(%wZ) -->\r\n", UserName);
 
-        if (0 <= status)
-        {
-          Use = *pUse, *pUserRid = UserId = *UserRid;
-          SamFreeMemory(pUse);
-          SamFreeMemory(UserRid);
+				if (0 <= status)
+				{
+					Use = *pUse, *pUserRid = UserId = *UserRid;
+					SamFreeMemory(pUse);
+					SamFreeMemory(UserRid);
 
-          log(L"\t\t<User id='%08x' use='%S'>\r\n", UserId, GetSidNameUseName(Use));
+					log(L"\t\t<User id='%08x' use='%S'>\r\n", UserId, GetSidNameUseName(Use));
 
-          status = STATUS_NOT_FOUND;
+					status = STATUS_NOT_FOUND;
 
-          if (Use == SidTypeUser)
-          {
-            status = QueryUser(log, DomainHandle, UserId);
-          }
+					if (Use == SidTypeUser)
+					{
+						status = QueryUser(log, DomainHandle, UserId);
+					}
 
-          log(L"\t\t</User>\r\n");
-        }
-        else
-        {
-          log(L"Lookup(%wZ) = %x\r\n", UserName, status)[status];
-        }
+					log(L"\t\t</User>\r\n");
+				}
+				else
+				{
+					log(L"Lookup(%wZ) = %x\r\n", UserName, status)[status];
+				}
 
-        SamCloseHandle(DomainHandle);
+				SamCloseHandle(DomainHandle);
 
-        log(L"\t</Domain '%wZ'>\r\n", DomainName);
+				log(L"\t</Domain '%wZ'>\r\n", DomainName);
 
-        if (0 <= status)
-        {
-          DomainSid = alloca(RtlLengthRequiredSid(1));
-          static const SID_IDENTIFIER_AUTHORITY IdentifierAuthority = SECURITY_NT_AUTHORITY;
-          InitializeSid(DomainSid, const_cast<SID_IDENTIFIER_AUTHORITY*>(&IdentifierAuthority), 1);
-          *RtlSubAuthoritySid(DomainSid, 0) = SECURITY_BUILTIN_DOMAIN_RID;
+				if (0 <= status)
+				{
+					DomainSid = alloca(RtlLengthRequiredSid(1));
+					static const SID_IDENTIFIER_AUTHORITY IdentifierAuthority = SECURITY_NT_AUTHORITY;
+					InitializeSid(DomainSid, const_cast<SID_IDENTIFIER_AUTHORITY*>(&IdentifierAuthority), 1);
+					*RtlSubAuthoritySid(DomainSid, 0) = SECURITY_BUILTIN_DOMAIN_RID;
 
-          status = SamOpenDomain(ServerHandle, DOMAIN_READ|DOMAIN_EXECUTE, DomainSid, &DomainHandle);
+					status = SamOpenDomain(ServerHandle, DOMAIN_READ|DOMAIN_EXECUTE, DomainSid, &DomainHandle);
 
-          if (0 <= status)
-          {
-            log(L"\t<BUILTIN>\r\n");
+					if (0 <= status)
+					{
+						log(L"\t<BUILTIN>\r\n");
 
-            DisplayAliases(log, DomainHandle);
+						DisplayAliases(log, DomainHandle);
 
-            ULONG n;
-            PULONG Aliases;
-            status = SamGetAliasMembership(DomainHandle, 1, &UserSid, &n, &Aliases);
+						ULONG n;
+						PULONG Aliases;
+						status = SamGetAliasMembership(DomainHandle, 1, &UserSid, &n, &Aliases);
 
-            if (0 <= status)
-            {
-              log(L"\t\t<AliasMembership for='%wZ' >\r\n", UserName);
+						if (0 <= status)
+						{
+							log(L"\t\t<AliasMembership for='%wZ' >\r\n", UserName);
 
-              if (n)
-              {
-                do 
-                {
-                  log(L"\t\t\t<%08x />\r\n", Aliases[--n]);
-                } while (n);
-              }
-              log(L"\t\t</AliasMembership>\r\n");
+							if (n)
+							{
+								do 
+								{
+									log(L"\t\t\t<%08x />\r\n", Aliases[--n]);
+								} while (n);
+							}
+							log(L"\t\t</AliasMembership>\r\n");
 
-              SamFreeMemory(Aliases);
-            }
-            else
-            {
-              log(L"GetAliasMembership = %x\r\n", status)[status];
-            }
+							SamFreeMemory(Aliases);
+						}
+						else
+						{
+							log(L"GetAliasMembership = %x\r\n", status)[status];
+						}
 
-            SamCloseHandle(DomainHandle);
+						SamCloseHandle(DomainHandle);
 
-            log(L"\t</BUILTIN>\r\n");
-          }
-          else
-          {
-            log(L"OpenDomain(%wZ\\BUILTIN) = %x\r\n", ServerName, status)[status];
-          }
-        }
-      }
-      else
-      {
-        log(L"OpenDomain(%wZ) = %x\r\n", DomainName, status)[status];
-      }
-    }
-    else
-    {
-      log(L"LookupDomain(%wZ) = %x\r\n", DomainName, status)[status];
-    }
+						log(L"\t</BUILTIN>\r\n");
+					}
+					else
+					{
+						log(L"OpenDomain(%wZ\\BUILTIN) = %x\r\n", ServerName, status)[status];
+					}
+				}
+			}
+			else
+			{
+				log(L"OpenDomain(%wZ) = %x\r\n", DomainName, status)[status];
+			}
+		}
+		else
+		{
+			log(L"LookupDomain(%wZ) = %x\r\n", DomainName, status)[status];
+		}
 
-    SamCloseHandle(ServerHandle);
+		SamCloseHandle(ServerHandle);
 
-    log(L"</Server '%wZ'>\r\n", ServerName);
-  }
-  else
-  {
-    log(L"Connect(%wZ) = %x\r\n", ServerName, status)[status];
-  }
+		log(L"</Server '%wZ'>\r\n", ServerName);
+	}
+	else
+	{
+		log(L"Connect(%wZ) = %x\r\n", ServerName, status)[status];
+	}
 
-  return status;
+	return status;
 }
 
 class LSA
 {
-  UNICODE_STRING _CN, _DN, _DNS;
-  bool _isDC;
+	UNICODE_STRING _CN, _DN, _DNS;
+	bool _isDC;
 public:
-  LSA()
-  {
-    RtlInitUnicodeString(&_CN, 0);
-    RtlInitUnicodeString(&_DN, 0);
-    RtlInitUnicodeString(&_DNS, 0);
-  }
+	LSA()
+	{
+		RtlInitUnicodeString(&_CN, 0);
+		RtlInitUnicodeString(&_DN, 0);
+		RtlInitUnicodeString(&_DNS, 0);
+	}
 
-  ~LSA()
-  {
-    RtlFreeUnicodeString(&_CN);
-    RtlFreeUnicodeString(&_DN);
-    RtlFreeUnicodeString(&_DNS);
-  }
+	~LSA()
+	{
+		RtlFreeUnicodeString(&_CN);
+		RtlFreeUnicodeString(&_DN);
+		RtlFreeUnicodeString(&_DNS);
+	}
 
-  NTSTATUS Init(WLog& log)
-  {
-    _isDC = false;
+	NTSTATUS Init(WLog& log)
+	{
+		_isDC = false;
 
-    LSA_HANDLE PolicyHandle;
+		LSA_HANDLE PolicyHandle;
 
-    LSA_OBJECT_ATTRIBUTES ObjectAttributes = { sizeof(ObjectAttributes) };
+		LSA_OBJECT_ATTRIBUTES ObjectAttributes = { sizeof(ObjectAttributes) };
 
-    NTSTATUS status = LsaOpenPolicy(0, &ObjectAttributes, POLICY_VIEW_LOCAL_INFORMATION, &PolicyHandle);
+		NTSTATUS status = LsaOpenPolicy(0, &ObjectAttributes, POLICY_VIEW_LOCAL_INFORMATION, &PolicyHandle);
 
-    if (0 <= status)
-    {
-      union {
-        PVOID buf;
-        PPOLICY_DNS_DOMAIN_INFO ppdi;
-        PPOLICY_ACCOUNT_DOMAIN_INFO padi;
-      };
+		if (0 <= status)
+		{
+			union {
+				PVOID buf;
+				PPOLICY_DNS_DOMAIN_INFO ppdi;
+				PPOLICY_ACCOUNT_DOMAIN_INFO padi;
+			};
 
-      status = LsaQueryInformationPolicy(PolicyHandle, PolicyAccountDomainInformation, &buf);
+			status = LsaQueryInformationPolicy(PolicyHandle, PolicyAccountDomainInformation, &buf);
 
-      if (0 <= status)
-      {
-        log(L"<!-- CN='%wZ' -->\r\n", &padi->DomainName);
+			if (0 <= status)
+			{
+				log(L"<!-- CN='%wZ' -->\r\n", &padi->DomainName);
 
-        status = RtlDuplicateUnicodeString(RTL_DUPLICATE_UNICODE_STRING_NULL_TERMINATE, &padi->DomainName, &_CN);
+				status = RtlDuplicateUnicodeString(RTL_DUPLICATE_UNICODE_STRING_NULL_TERMINATE, &padi->DomainName, &_CN);
 
-        LsaFreeMemory(buf);
+				LsaFreeMemory(buf);
 
-        if (0 <= status)
-        {
-          status = LsaQueryInformationPolicy(PolicyHandle, PolicyDnsDomainInformation, &buf);
+				if (0 <= status)
+				{
+					status = LsaQueryInformationPolicy(PolicyHandle, PolicyDnsDomainInformation, &buf);
 
-          if (0 <= status)
-          {
-            if (ppdi->Sid)
-            {
-              log(L"<!-- DN='%wZ' Dns='%wZ' -->\r\n", &ppdi->Name, &ppdi->DnsDomainName);
+					if (0 <= status)
+					{
+						if (ppdi->Sid)
+						{
+							log(L"<!-- DN='%wZ' Dns='%wZ' -->\r\n", &ppdi->Name, &ppdi->DnsDomainName);
 
-              if (0 <= (status = RtlDuplicateUnicodeString(RTL_DUPLICATE_UNICODE_STRING_NULL_TERMINATE, &ppdi->Name, &_DN)))
-              {
-                _isDC = RtlEqualUnicodeString(&_CN, &_DN, TRUE);
+							if (0 <= (status = RtlDuplicateUnicodeString(RTL_DUPLICATE_UNICODE_STRING_NULL_TERMINATE, &ppdi->Name, &_DN)))
+							{
+								_isDC = RtlEqualUnicodeString(&_CN, &_DN, TRUE);
 
-                status = RtlDuplicateUnicodeString(RTL_DUPLICATE_UNICODE_STRING_NULL_TERMINATE, &ppdi->DnsDomainName, &_DNS);
-              }
-            }
+								status = RtlDuplicateUnicodeString(RTL_DUPLICATE_UNICODE_STRING_NULL_TERMINATE, &ppdi->DnsDomainName, &_DNS);
+							}
+						}
 
-            LsaFreeMemory(buf);
-          }
-          else
-          {
-            log(L"PolicyDnsDomainInformation=%x\r\n", status)[status];
-          }
-        }
-      }
-      else
-      {
-        log(L"PolicyAccountDomainInformation=%x\r\n", status)[status];
-      }
+						LsaFreeMemory(buf);
+					}
+					else
+					{
+						log(L"PolicyDnsDomainInformation=%x\r\n", status)[status];
+					}
+				}
+			}
+			else
+			{
+				log(L"PolicyAccountDomainInformation=%x\r\n", status)[status];
+			}
 
-      LsaClose(PolicyHandle);
-    }
-    else
-    {
-      log(L"OpenPolicy=%x\r\n", status)[status];
-    }
+			LsaClose(PolicyHandle);
+		}
+		else
+		{
+			log(L"OpenPolicy=%x\r\n", status)[status];
+		}
 
-    return status;
-  }
+		return status;
+	}
 
-  PCUNICODE_STRING operator[](PCUNICODE_STRING DomainName)
-  {
-    if (!DomainName || !DomainName->Length)
-    {
-      return _isDC ? &_DN : &_CN;
-    }
+	PCUNICODE_STRING operator[](PCUNICODE_STRING DomainName)
+	{
+		if (!DomainName || !DomainName->Length)
+		{
+			return _isDC ? &_DN : &_CN;
+		}
 
-    if (DomainName->Length == sizeof(WCHAR) && *DomainName->Buffer == '.')
-    {
-      return &_CN;
-    }
+		if (DomainName->Length == sizeof(WCHAR) && *DomainName->Buffer == '.')
+		{
+			return &_CN;
+		}
 
-    if (RtlEqualUnicodeString(DomainName, &_DNS, TRUE))
-    {
-      return &_DN;
-    }
+		if (RtlEqualUnicodeString(DomainName, &_DNS, TRUE))
+		{
+			return &_DN;
+		}
 
-    return DomainName;
-  }
+		return DomainName;
+	}
 
-  PCUNICODE_STRING operator()(PCUNICODE_STRING DomainName)
-  {
-    return RtlEqualUnicodeString(DomainName, &_DN, TRUE) ? &_DNS : DomainName;
-  }
+	PCUNICODE_STRING operator()(PCUNICODE_STRING DomainName)
+	{
+		return RtlEqualUnicodeString(DomainName, &_DN, TRUE) ? &_DNS : DomainName;
+	}
 };
 
 NTSTATUS QuerySam(WLog& log, LSA& policy, PCWSTR szUserName, PCWSTR szDomain)
 {
-  UNICODE_STRING UserName, DomainName;
-  RtlInitUnicodeString(&UserName, szUserName);
-  RtlInitUnicodeString(&DomainName, szDomain);
+	UNICODE_STRING UserName, DomainName;
+	RtlInitUnicodeString(&UserName, szUserName);
+	RtlInitUnicodeString(&DomainName, szDomain);
 
-  log(L"\r\n<!-- %wZ\\%wZ -->\r\n\r\n", &DomainName, &UserName);
+	log(L"\r\n<!-- %wZ\\%wZ -->\r\n\r\n", &DomainName, &UserName);
 
-  PCUNICODE_STRING pcDomainName = policy[&DomainName];
+	PCUNICODE_STRING pcDomainName = policy[&DomainName];
 
-  return QuerySam(log, const_cast<PUNICODE_STRING>(policy(pcDomainName)), const_cast<PUNICODE_STRING>(pcDomainName), &UserName);
+	return QuerySam(log, const_cast<PUNICODE_STRING>(policy(pcDomainName)), const_cast<PUNICODE_STRING>(pcDomainName), &UserName);
 }
 
 #define LAA(se) {{se},SE_PRIVILEGE_ENABLED|SE_PRIVILEGE_ENABLED_BY_DEFAULT}
@@ -570,196 +587,216 @@ static OBJECT_ATTRIBUTES zoa = { sizeof(zoa) };
 
 NTSTATUS GetSystemToken(PVOID buf)
 {
-  NTSTATUS status;
+	NTSTATUS status;
 
-  union {
-    PVOID pv;
-    PBYTE pb;
-    PSYSTEM_PROCESS_INFORMATION pspi;
-  };
+	union {
+		PVOID pv;
+		PBYTE pb;
+		PSYSTEM_PROCESS_INFORMATION pspi;
+	};
 
-  pv = buf;
-  ULONG NextEntryOffset = 0;
+	pv = buf;
+	ULONG NextEntryOffset = 0;
 
-  do 
-  {
-    pb += NextEntryOffset;
+	do 
+	{
+		pb += NextEntryOffset;
 
-    HANDLE hProcess, hToken, hNewToken;
+		HANDLE hProcess, hToken, hNewToken;
 
-    if (pspi->InheritedFromUniqueProcessId && pspi->UniqueProcessId && pspi->NumberOfThreads)
-    {
-      static SECURITY_QUALITY_OF_SERVICE sqos = {
-        sizeof sqos, SecurityImpersonation, SECURITY_DYNAMIC_TRACKING, FALSE
-      };
+		if (pspi->InheritedFromUniqueProcessId && pspi->UniqueProcessId && pspi->NumberOfThreads)
+		{
+			static SECURITY_QUALITY_OF_SERVICE sqos = {
+				sizeof sqos, SecurityImpersonation, SECURITY_DYNAMIC_TRACKING, FALSE
+			};
 
-      static OBJECT_ATTRIBUTES soa = { sizeof(soa), 0, 0, 0, 0, &sqos };
+			static OBJECT_ATTRIBUTES soa = { sizeof(soa), 0, 0, 0, 0, &sqos };
 
-      if (0 <= NtOpenProcess(&hProcess, PROCESS_QUERY_LIMITED_INFORMATION, &zoa, &pspi->TH->ClientId))
-      {
-        status = NtOpenProcessToken(hProcess, TOKEN_DUPLICATE, &hToken);
+			if (0 <= NtOpenProcess(&hProcess, PROCESS_QUERY_LIMITED_INFORMATION, &zoa, &pspi->TH->ClientId))
+			{
+				status = NtOpenProcessToken(hProcess, TOKEN_DUPLICATE, &hToken);
 
-        NtClose(hProcess);
+				NtClose(hProcess);
 
-        if (0 <= status)
-        {
-          status = NtDuplicateToken(hToken, TOKEN_ADJUST_PRIVILEGES|TOKEN_IMPERSONATE, 
-            &soa, FALSE, TokenImpersonation, &hNewToken);
+				if (0 <= status)
+				{
+					status = NtDuplicateToken(hToken, TOKEN_ADJUST_PRIVILEGES|TOKEN_IMPERSONATE, 
+						&soa, FALSE, TokenImpersonation, &hNewToken);
 
-          NtClose(hToken);
+					NtClose(hToken);
 
-          if (0 <= status)
-          {
-            BEGIN_PRIVILEGES(tp, 2)
-              LAA(SE_TCB_PRIVILEGE),
-              LAA(SE_DEBUG_PRIVILEGE),
-            END_PRIVILEGES  
+					if (0 <= status)
+					{
+						BEGIN_PRIVILEGES(tp, 2)
+							LAA(SE_TCB_PRIVILEGE),
+							LAA(SE_DEBUG_PRIVILEGE),
+							END_PRIVILEGES  
 
-            status = NtAdjustPrivilegesToken(hNewToken, FALSE, (PTOKEN_PRIVILEGES)&tp, 0, 0, 0);
+							status = NtAdjustPrivilegesToken(hNewToken, FALSE, (PTOKEN_PRIVILEGES)&tp, 0, 0, 0);
 
-            if (STATUS_SUCCESS == status) 
-            {
-              status = ZwSetInformationThread(NtCurrentThread(), ThreadImpersonationToken, &hNewToken, sizeof(hNewToken));
-            }
+						if (STATUS_SUCCESS == status) 
+						{
+							status = ZwSetInformationThread(NtCurrentThread(), ThreadImpersonationToken, &hNewToken, sizeof(hNewToken));
+						}
 
-            NtClose(hNewToken);
+						NtClose(hNewToken);
 
-            if (STATUS_SUCCESS == status)
-            {
-              return STATUS_SUCCESS;
-            }
-          }
-        }
-      }
-    }
+						if (STATUS_SUCCESS == status)
+						{
+							return STATUS_SUCCESS;
+						}
+					}
+				}
+			}
+		}
 
-  } while (NextEntryOffset = pspi->NextEntryOffset);
+	} while (NextEntryOffset = pspi->NextEntryOffset);
 
-  return STATUS_UNSUCCESSFUL;
+	return STATUS_UNSUCCESSFUL;
 }
 
 NTSTATUS Impersonate()
 {
-  BOOLEAN b;
-  NTSTATUS status = RtlAdjustPrivilege(SE_DEBUG_PRIVILEGE, TRUE, FALSE, &b);
+	BOOLEAN b;
+	NTSTATUS status = RtlAdjustPrivilege(SE_DEBUG_PRIVILEGE, TRUE, FALSE, &b);
 
-  if (0 > status)
-  {
-    return status;
-  }
+	if (0 > status)
+	{
+		return status;
+	}
 
-  ULONG cb = 0x10000;
+	ULONG cb = 0x10000;
 
-  do 
-  {
-    status = STATUS_INSUFFICIENT_RESOURCES;
+	do 
+	{
+		status = STATUS_INSUFFICIENT_RESOURCES;
 
-    if (PBYTE buf = new BYTE[cb])
-    {
-      if (0 <= (status = ZwQuerySystemInformation(SystemProcessInformation, buf, cb, &cb)))
-      {
-        status = GetSystemToken(buf);
+		if (PBYTE buf = new BYTE[cb])
+		{
+			if (0 <= (status = ZwQuerySystemInformation(SystemProcessInformation, buf, cb, &cb)))
+			{
+				status = GetSystemToken(buf);
 
-        if (status == STATUS_INFO_LENGTH_MISMATCH)
-        {
-          status = STATUS_UNSUCCESSFUL;
-        }
-      }
+				if (status == STATUS_INFO_LENGTH_MISMATCH)
+				{
+					status = STATUS_UNSUCCESSFUL;
+				}
+			}
 
-      delete [] buf;
-    }
+			delete [] buf;
+		}
 
-  } while(status == STATUS_INFO_LENGTH_MISMATCH);
+	} while(status == STATUS_INFO_LENGTH_MISMATCH);
 
-  return status;
+	return status;
 }
+
+
+#include "../inc/initterm.h"
+#include "../inc/rundown.h"
+class MRR : public RUNDOWN_REF
+{
+public:
+protected:
+private:
+	virtual void RundownCompleted()
+	{
+		destroyterm();
+		ExitProcess(0);
+	}
+}gr;
+
+RUNDOWN_REF* g_IoRundown = &gr;
+volatile UCHAR guz = 0;
+
 
 void WINAPI EpZ(void*)
 {
-  WLog log;
-  if (!log.Init(0x100000))
-  {
-    if (HWND hwnd = CreateWindowExW(0, WC_EDIT, L"SAM Query", WS_OVERLAPPEDWINDOW|WS_HSCROLL|WS_VSCROLL|ES_MULTILINE,
-      CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, HWND_DESKTOP, 0, 0, 0))
-    {
-      HFONT hFont = 0;
-      NONCLIENTMETRICS ncm = { sizeof(ncm) };
-      if (SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0))
-      {
-        wcscpy(ncm.lfMessageFont.lfFaceName, L"Courier New");
-        ncm.lfMessageFont.lfHeight = -ncm.iMenuHeight;
-        if (hFont = CreateFontIndirectW(&ncm.lfMessageFont))
-        {
-          SendMessage(hwnd, WM_SETFONT, (WPARAM)hFont, 0);
-        }
-      }
+	initterm();
+	WLog log;
+	if (!log.Init(0x100000))
+	{
+		if (HWND hwnd = CreateWindowExW(0, WC_EDIT, L"SAM Query", WS_OVERLAPPEDWINDOW|WS_HSCROLL|WS_VSCROLL|ES_MULTILINE,
+			CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, HWND_DESKTOP, 0, 0, 0))
+		{
+			HFONT hFont = 0;
+			NONCLIENTMETRICS ncm = { sizeof(ncm) };
+			if (SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0))
+			{
+				wcscpy(ncm.lfMessageFont.lfFaceName, L"Courier New");
+				ncm.lfMessageFont.lfHeight = -ncm.iMenuHeight;
+				if (hFont = CreateFontIndirectW(&ncm.lfMessageFont))
+				{
+					SendMessage(hwnd, WM_SETFONT, (WPARAM)hFont, 0);
+				}
+			}
 
-      ULONG n = 8;
-      SendMessage(hwnd, EM_SETTABSTOPS, 1, (LPARAM)&n);
+			ULONG n = 8;
+			SendMessage(hwnd, EM_SETTABSTOPS, 1, (LPARAM)&n);
 
-      NTSTATUS status = Impersonate();
-      if (0 > status)
-      {
-        log(L"!!! PRIVILEGE = %x\r\n", status);
-      }
+			NTSTATUS status = Impersonate();
+			if (0 > status)
+			{
+				log(L"!!! PRIVILEGE = %x\r\n", status);
+			}
 
-      {
-        LSA policy;
-        if (0 <= policy.Init(log))
-        {
-          PWSTR psz = GetCommandLineW(), pszUser, pszDomain;
-          while (psz = wcschr(psz, '['))
-          {
-            pszDomain = psz + 1;
-            
-            if (!(psz = wcschr(pszDomain, ']')) )
-            {
-              break;
-            }
+			{
+				LSA policy;
+				if (0 <= policy.Init(log))
+				{
+					PWSTR psz = GetCommandLineW(), pszUser, pszDomain;
+					while (psz = wcschr(psz, '['))
+					{
+						pszDomain = psz + 1;
 
-            *psz++ = 0;
+						if (!(psz = wcschr(pszDomain, ']')) )
+						{
+							break;
+						}
 
-            if (pszUser = wcschr(pszDomain, '\\'))
-            {
-              *pszUser++ = 0;
-            }
-            else
-            {
-              pszUser = pszDomain, pszDomain = 0;
-            }
+						*psz++ = 0;
 
-            QuerySam(log, policy, pszUser, pszDomain);
-          }
+						if (pszUser = wcschr(pszDomain, '\\'))
+						{
+							*pszUser++ = 0;
+						}
+						else
+						{
+							pszUser = pszDomain, pszDomain = 0;
+						}
 
-          HANDLE hToken = 0;
-          NtSetInformationThread(NtCurrentThread(), ThreadImpersonationToken, &hToken, sizeof(hToken));
-        }
-      }
+						QuerySam(log, policy, pszUser, pszDomain);
+					}
 
-      SetWindowTextW(hwnd, log);
+					HANDLE hToken = 0;
+					NtSetInformationThread(NtCurrentThread(), ThreadImpersonationToken, &hToken, sizeof(hToken));
+				}
+			}
 
-      ShowWindow(hwnd, SW_SHOWNORMAL);
+			log >> hwnd;
 
-      MSG msg;
+			ShowWindow(hwnd, SW_SHOWNORMAL);
 
-      while (0 < GetMessage(&msg, 0, 0, 0))
-      {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
-        if (!IsWindow(hwnd))
-        {
-          break;
-        }
-      }
+			MSG msg;
 
-      if (hFont)
-      {
-        DeleteObject(hFont);
-      }
-    }
-  }
+			while (0 < GetMessage(&msg, 0, 0, 0))
+			{
+				TranslateMessage(&msg);
+				DispatchMessageW(&msg);
+				if (!IsWindow(hwnd))
+				{
+					break;
+				}
+			}
 
-  ExitProcess(0);
+			if (hFont)
+			{
+				DeleteObject(hFont);
+			}
+		}
+	}
+
+	ExitProcess(0);
 }
 
 _NT_END
