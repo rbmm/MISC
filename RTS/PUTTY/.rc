@@ -1,0 +1,17 @@
+#include "winres.h"
+#include "resource.h"
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+
+1 RT_MANIFEST ".manifest"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_ICON1               ICON                    "xyz.ico"
+
+

@@ -1,0 +1,1 @@
+putty_sh.exe * <server>
