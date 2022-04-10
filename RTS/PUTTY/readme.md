@@ -1,1 +1,1 @@
-putty_sh.exe * <server>
+putty_sh.exe * server
