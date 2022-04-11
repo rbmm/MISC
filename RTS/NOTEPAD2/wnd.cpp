@@ -47,7 +47,7 @@ class ShellWnd : public ZWnd
 
 				HWND hwndEmbeded = 0;
 				EnumThreadWindows(pi.dwThreadId, EnumThreadWndProc, (LPARAM)&hwndEmbeded);
-				AttachThreadInput(pi.dwThreadId, GetCurrentThreadId(), TRUE);
+				//AttachThreadInput(pi.dwThreadId, GetCurrentThreadId(), TRUE);
 				NtClose(pi.hThread);
 
 				if (hwndEmbeded)
@@ -108,11 +108,40 @@ class ShellWnd : public ZWnd
 				}
 			}
 			break;
-		case WM_DESTROY:
+		case WM_SETFOCUS:
+			SetFocus(_hwnd);
 			break;
 		}
 
 		return __super::WindowProc(hwnd, uMsg, wParam, lParam);
+	}
+};
+
+class ZSW : public ZFrameMultiWnd
+{
+public:
+protected:
+private:
+
+	virtual BOOL CreateClient(HWND hWndParent, int nWidth, int nHeight, PVOID lpCreateParams)
+	{
+		int cy = GetSystemMetrics(SM_CYMENU);
+
+		if (CreateWindowExW(0, WC_STATICW, L" [ DEMO ] ", WS_CHILD|WS_VISIBLE|SS_CENTER, 0, 0, nWidth, cy, hWndParent, 0, 0, 0))
+		{
+			if (ShellWnd* p = new ShellWnd)
+			{
+				HWND hwnd = p->Create(0, 0, WS_CHILD|WS_VISIBLE, 
+					0, cy, nWidth, nHeight - cy, hWndParent, 0, 0);
+
+				p->Release();
+
+				SetView(hwnd);
+				return hwnd != 0;
+			}
+		}
+
+		return FALSE;
 	}
 };
 
@@ -125,9 +154,9 @@ void WINAPI ep(void*)
 
 	if (0 <= CoInitializeEx(0, COINIT_APARTMENTTHREADED|COINIT_DISABLE_OLE1DDE))
 	{
-		if (ShellWnd* p = new ShellWnd)
+		if (ZSW* p = new ZSW)
 		{
-			HWND hwnd = p->Create(WS_EX_CLIENTEDGE, L"[ putty ]", WS_OVERLAPPEDWINDOW|WS_VISIBLE, 
+			HWND hwnd = p->Create(WS_EX_CLIENTEDGE, L"[ putty-2 ]", WS_OVERLAPPEDWINDOW|WS_VISIBLE, 
 				CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, HWND_DESKTOP, 0, 0);
 
 			p->Release();
