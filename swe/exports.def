@@ -1,0 +1,6 @@
+LIBRARY	"swe"
+
+EXPORTS
+
+CreateTaskMngr
+CreateShlWnd
