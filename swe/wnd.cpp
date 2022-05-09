@@ -9,11 +9,29 @@ _NT_BEGIN
 enum { aRedirect = 0x782303DE, aSetTask = 0x353481A5 };
 
 LIST_ENTRY gList = { &gList, &gList };
+LIST_ENTRY gwndList = { &gwndList, &gwndList };
 
 ULONG GetSecondsCount()
 {
 	return (ULONG)(GetTickCount64() / 1000);
 }
+
+struct FOCUS_INFO : LIST_ENTRY
+{
+	HWND hwndChild;
+	HWND hwndParent;
+
+	FOCUS_INFO(HWND hwndParent, HWND hwndChild) : hwndParent(hwndParent), hwndChild(hwndChild)
+	{
+		InsertHeadList(&gwndList, this);
+	}
+
+	~FOCUS_INFO()
+	{
+		RemoveEntryList(this);
+		DbgPrint("%s<%p>(%x)\n", __FUNCTION__, this);
+	}
+};
 
 struct PARENT_INFO : LIST_ENTRY
 {
@@ -52,6 +70,17 @@ void CleanupWinEvents(HWINEVENTHOOK hWinEventHook)
 
 		delete pi;
 	}
+
+	entry = gwndList.Flink;
+
+	while (entry != &gwndList)
+	{
+		FOCUS_INFO* pi = static_cast<FOCUS_INFO*>(entry);
+
+		entry = entry->Flink;
+
+		delete pi;
+	}
 }
 
 HRESULT AddParentInfo(_In_ HWND hwnd, _In_ PPROCESS_INFORMATION lpProcessInformation, _In_ ITask* pTask)
@@ -70,6 +99,7 @@ class ShellWnd : public ZWnd
 {
 	ITask* _pTask = 0;
 	HWND _hwnd = 0;
+	FOCUS_INFO* _pfi = 0;
 	POINT _pt;
 	SIZE _s;
 
@@ -90,7 +120,7 @@ class ShellWnd : public ZWnd
 		//SetWindowLongW(hwndForEmbed, GWL_EXSTYLE, (dwStyle & ~(WS_EX_APPWINDOW|WS_EX_CONTROLPARENT)) | WS_EX_TOOLWINDOW);
 
 		//dwStyle = GetWindowLongW(hwndForEmbed, GWL_STYLE);
-		//SetWindowLongW(hwndForEmbed, GWL_STYLE, (dwStyle & ~(WS_GROUP|WS_TABSTOP)));
+		//SetWindowLongW(hwndForEmbed, GWL_STYLE, (dwStyle & ~(WS_GROUP|WS_TABSTOP)));WS_EX_CONTROLPARENT
 
 		GetWindowRect(hwndForEmbed, &rcw);
 		POINT pt = { rcw.left, rcw.top };
@@ -147,7 +177,11 @@ class ShellWnd : public ZWnd
 			case aRedirect:
 				DbgPrint("====== SetParent(%p)\n", lParam);
 				_hwnd = (HWND)lParam;
-				if (!(RedirectParent(hwnd, (HWND)lParam)))
+				if (RedirectParent(hwnd, (HWND)lParam))
+				{
+					_pfi = new FOCUS_INFO(GetParent(hwnd), (HWND)lParam);
+				}
+				else
 				{
 					DestroyWindow(hwnd);
 				}
@@ -167,6 +201,11 @@ class ShellWnd : public ZWnd
 			{
 				pTask->Close();
 				pTask->Release();
+			}
+
+			if (FOCUS_INFO* pfi = _pfi)
+			{
+				delete pfi;
 			}
 			break;
 
@@ -194,6 +233,106 @@ HWND CreateShlWnd(_In_ HWND hWndParent, _In_ int nWidth, _In_ int nHeight)
 	return 0;
 }
 
+void OnCreateWnd(HWND hwnd, DWORD dwEventThread)
+{
+	WCHAR clsn[128];
+	PLIST_ENTRY entry = gList.Flink;
+
+	//++ kill too old entry
+	while (entry != &gList)
+	{
+		PARENT_INFO* pi = static_cast<PARENT_INFO*>(entry);
+		entry = entry->Flink;
+
+		if (pi->time < GetSecondsCount() )
+		{
+			delete pi;
+		}
+	}
+	//++ kill too old entry
+
+	while ((entry = entry->Flink) != &gList)
+	{
+		if (static_cast<PARENT_INFO*>(entry)->dwThreadId == dwEventThread)
+		{
+			if (!GetClassNameW(hwnd, clsn, _countof(clsn)))
+			{
+				swprintf_s(clsn, _countof(clsn), L"!! %u", GetLastError());
+			}
+
+			DbgPrint("++%p:%p(%p) %x.%x %S\n", hwnd, GetParent(hwnd), 
+				GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT),
+				GetWindowLongW(hwnd, GWL_STYLE), GetWindowLongW(hwnd, GWL_EXSTYLE), clsn);
+
+			if (IsWindow(hwnd) &&
+				!(GetWindowLongW(hwnd, GWL_STYLE) & (WS_CHILD|WS_POPUP)) &&
+				!(GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) &&
+				!GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT) &&
+				!GetParent(hwnd))
+			{
+__0:
+				PostMessageW(static_cast<PARENT_INFO*>(entry)->hwndParent, WM_NULL, aRedirect, (LPARAM)hwnd);
+
+				delete static_cast<PARENT_INFO*>(entry);
+
+				return;
+			}
+		}
+	}
+
+	if (GetClassNameW(hwnd, clsn, _countof(clsn)) && !wcscmp(clsn, L"ConsoleWindowClass"))
+	{
+		ULONG dwProcessId;
+		if (GetWindowThreadProcessId(hwnd, &dwProcessId))
+		{
+			entry = &gList;
+
+			while ((entry = entry->Flink) != &gList)
+			{
+				if (static_cast<PARENT_INFO*>(entry)->dwProcessId == dwProcessId)
+				{
+					goto __0;
+				}
+			}
+
+			if (HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, dwProcessId))
+			{
+				PROCESS_BASIC_INFORMATION pbi;
+				NTSTATUS status = NtQueryInformationProcess(hProcess, ProcessBasicInformation, &pbi, sizeof(pbi), 0);
+				NtClose(hProcess);
+
+				if (0 <= status)
+				{
+					entry = &gList;
+
+					while ((entry = entry->Flink) != &gList)
+					{
+						if (static_cast<PARENT_INFO*>(entry)->dwProcessId == (ULONG)pbi.InheritedFromUniqueProcessId)
+						{
+							goto __0;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+void OnFocus(HWND hwnd)
+{
+	PLIST_ENTRY entry = &gwndList;
+
+	while ((entry = entry->Flink) != &gwndList)
+	{
+		if (static_cast<FOCUS_INFO*>(entry)->hwndChild == hwnd)
+		{
+			//DbgPrint(">>>>>>>> %p > %p\n", hwnd, static_cast<FOCUS_INFO*>(entry)->hwndParent);
+			SetFocus(static_cast<FOCUS_INFO*>(entry)->hwndParent);
+			break;
+		}
+	}
+}
+
 VOID CALLBACK WinEventProc(
 						   HWINEVENTHOOK /*hWinEventHook*/,
 						   DWORD event,
@@ -204,88 +343,16 @@ VOID CALLBACK WinEventProc(
 						   DWORD /*dwmsEventTime*/
 						   )
 {
-	if (event == EVENT_OBJECT_CREATE && hwnd && idObject == OBJID_WINDOW && idChild == CHILDID_SELF)
+	if (hwnd )
 	{
-		WCHAR clsn[128];
-		PLIST_ENTRY entry = gList.Flink;
-
-		//++ kill too old entry
-		while (entry != &gList)
+		switch (event)
 		{
-			PARENT_INFO* pi = static_cast<PARENT_INFO*>(entry);
-			entry = entry->Flink;
-
-			if (pi->time < GetSecondsCount() )
-			{
-				delete pi;
-			}
-		}
-		//++ kill too old entry
-
-		while ((entry = entry->Flink) != &gList)
-		{
-			if (static_cast<PARENT_INFO*>(entry)->dwThreadId == dwEventThread)
-			{
-				if (!GetClassNameW(hwnd, clsn, _countof(clsn)))
-				{
-					swprintf_s(clsn, _countof(clsn), L"!! %u", GetLastError());
-				}
-
-				DbgPrint("++%p:%p(%p) %x.%x %S\n", hwnd, GetParent(hwnd), 
-					GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT),
-					GetWindowLongW(hwnd, GWL_STYLE), GetWindowLongW(hwnd, GWL_EXSTYLE), clsn);
-
-				if (IsWindow(hwnd) &&
-					!(GetWindowLongW(hwnd, GWL_STYLE) & (WS_CHILD|WS_POPUP)) &&
-					!(GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) &&
-					!GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT) &&
-					!GetParent(hwnd))
-				{
-__0:
-					PostMessageW(static_cast<PARENT_INFO*>(entry)->hwndParent, WM_NULL, aRedirect, (LPARAM)hwnd);
-
-					delete static_cast<PARENT_INFO*>(entry);
-
-					return;
-				}
-			}
-		}
-
-		if (GetClassNameW(hwnd, clsn, _countof(clsn)) && !wcscmp(clsn, L"ConsoleWindowClass"))
-		{
-			ULONG dwProcessId;
-			if (GetWindowThreadProcessId(hwnd, &dwProcessId))
-			{
-				entry = &gList;
-
-				while ((entry = entry->Flink) != &gList)
-				{
-					if (static_cast<PARENT_INFO*>(entry)->dwProcessId == dwProcessId)
-					{
-						goto __0;
-					}
-				}
-
-				if (HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, dwProcessId))
-				{
-					PROCESS_BASIC_INFORMATION pbi;
-					NTSTATUS status = NtQueryInformationProcess(hProcess, ProcessBasicInformation, &pbi, sizeof(pbi), 0);
-					NtClose(hProcess);
-
-					if (0 <= status)
-					{
-						entry = &gList;
-
-						while ((entry = entry->Flink) != &gList)
-						{
-							if (static_cast<PARENT_INFO*>(entry)->dwProcessId == (ULONG)pbi.InheritedFromUniqueProcessId)
-							{
-								goto __0;
-							}
-						}
-					}
-				}
-			}
+		case EVENT_OBJECT_CREATE:
+			if (idObject == OBJID_WINDOW && idChild == CHILDID_SELF) OnCreateWnd(hwnd, dwEventThread);
+			break;
+		case EVENT_OBJECT_FOCUS:
+			OnFocus(hwnd);
+			break;
 		}
 	}
 }
