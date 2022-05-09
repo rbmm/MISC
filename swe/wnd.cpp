@@ -120,7 +120,7 @@ class ShellWnd : public ZWnd
 		//SetWindowLongW(hwndForEmbed, GWL_EXSTYLE, (dwStyle & ~(WS_EX_APPWINDOW|WS_EX_CONTROLPARENT)) | WS_EX_TOOLWINDOW);
 
 		//dwStyle = GetWindowLongW(hwndForEmbed, GWL_STYLE);
-		//SetWindowLongW(hwndForEmbed, GWL_STYLE, (dwStyle & ~(WS_GROUP|WS_TABSTOP)));WS_EX_CONTROLPARENT
+		//SetWindowLongW(hwndForEmbed, GWL_STYLE, (dwStyle & ~(WS_GROUP|WS_TABSTOP)));
 
 		GetWindowRect(hwndForEmbed, &rcw);
 		POINT pt = { rcw.left, rcw.top };
@@ -327,6 +327,7 @@ void OnFocus(HWND hwnd)
 		if (static_cast<FOCUS_INFO*>(entry)->hwndChild == hwnd)
 		{
 			//DbgPrint(">>>>>>>> %p > %p\n", hwnd, static_cast<FOCUS_INFO*>(entry)->hwndParent);
+			BringWindowToTop(GetAncestor(static_cast<FOCUS_INFO*>(entry)->hwndParent, GA_ROOT));
 			SetFocus(static_cast<FOCUS_INFO*>(entry)->hwndParent);
 			break;
 		}
