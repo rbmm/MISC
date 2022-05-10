@@ -327,8 +327,17 @@ void OnFocus(HWND hwnd)
 		if (static_cast<FOCUS_INFO*>(entry)->hwndChild == hwnd)
 		{
 			//DbgPrint(">>>>>>>> %p > %p\n", hwnd, static_cast<FOCUS_INFO*>(entry)->hwndParent);
-			BringWindowToTop(GetAncestor(static_cast<FOCUS_INFO*>(entry)->hwndParent, GA_ROOT));
-			SetFocus(static_cast<FOCUS_INFO*>(entry)->hwndParent);
+			int n = 32;
+			BringWindowToTop(GetAncestor(hwnd = static_cast<FOCUS_INFO*>(entry)->hwndParent, GA_ROOT));
+			SetFocus(hwnd);
+			do 
+			{
+				if (!--n)
+				{
+					break;
+				}
+				SendMessageW(hwnd, WM_NCACTIVATE, TRUE, 0);
+			} while (hwnd = GetAncestor(hwnd, GA_PARENT));
 			break;
 		}
 	}
