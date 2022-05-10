@@ -320,25 +320,38 @@ __0:
 
 void OnFocus(HWND hwnd)
 {
-	PLIST_ENTRY entry = &gwndList;
+	ULONG dwProcessId;
 
-	while ((entry = entry->Flink) != &gwndList)
+	if (GetWindowThreadProcessId(hwnd, &dwProcessId))
 	{
-		if (static_cast<FOCUS_INFO*>(entry)->hwndChild == hwnd)
+		static ULONG s_dwLastActive;
+
+		PLIST_ENTRY entry = &gwndList;
+
+		while ((entry = entry->Flink) != &gwndList)
 		{
-			//DbgPrint(">>>>>>>> %p > %p\n", hwnd, static_cast<FOCUS_INFO*>(entry)->hwndParent);
-			int n = 32;
-			BringWindowToTop(GetAncestor(hwnd = static_cast<FOCUS_INFO*>(entry)->hwndParent, GA_ROOT));
-			SetFocus(hwnd);
-			do 
+			if (static_cast<FOCUS_INFO*>(entry)->hwndChild == hwnd)
 			{
-				if (!--n)
+				int n = 32;
+				BringWindowToTop(GetAncestor(hwnd = static_cast<FOCUS_INFO*>(entry)->hwndParent, GA_ROOT));
+				SetFocus(hwnd);
+				do 
 				{
-					break;
-				}
-				SendMessageW(hwnd, WM_NCACTIVATE, TRUE, 0);
-			} while (hwnd = GetAncestor(hwnd, GA_PARENT));
-			break;
+					SendMessageW(hwnd, WM_NCACTIVATE, TRUE, 0);
+				} while (--n && (hwnd = GetAncestor(hwnd, GA_PARENT)));
+
+				s_dwLastActive = dwProcessId;
+				return;
+			}
+		}
+
+		if (dwProcessId != GetCurrentProcessId() && dwProcessId != s_dwLastActive)
+		{
+			GUITHREADINFO gui = { sizeof(gui) };
+			if (GetGUIThreadInfo(GetCurrentThreadId(), &gui))
+			{
+				SendMessageW(gui.hwndActive, WM_NCACTIVATE, FALSE, 0);
+			}
 		}
 	}
 }
