@@ -68,36 +68,20 @@ class ShellWnd : public ZWnd
 
 	BOOL RedirectParent(_In_ HWND hwnd, _In_ HWND hwndForEmbed, _In_ int cx, _In_ int cy)
 	{
-		if (!SetParent(hwndForEmbed, hwnd))
+		if (SetParent(hwndForEmbed, hwnd))
 		{
-			GetLastError();
-			return FALSE;
+			RECT rc { 0, 0, cx, cy };
+
+			if (AdjustWindowRectEx(&rc, GetWindowLongW(hwndForEmbed, GWL_STYLE), FALSE, GetWindowLongW(hwndForEmbed, GWL_EXSTYLE)))
+			{
+				_pt.x = rc.left, _pt.y = rc.top, _s.cx = (rc.right -= rc.left) - cx, _s.cy = (rc.bottom -= rc.top) - cy;
+
+				InvalidateRect(hwndForEmbed, 0, TRUE);
+
+				return SetWindowPos(hwndForEmbed, 0, rc.left, rc.top, rc.right, rc.bottom, SWP_FRAMECHANGED|SWP_SHOWWINDOW|SWP_NOZORDER);
+			}
 		}
-
-		RECT rc;
-
-		//ULONG dwStyle = GetWindowLongW(hwndForEmbed, GWL_EXSTYLE);
-
-		//SetWindowLongW(hwndForEmbed, GWL_EXSTYLE, (dwStyle & ~(WS_EX_APPWINDOW|WS_EX_CONTROLPARENT)) | WS_EX_TOOLWINDOW);
-
-		//dwStyle = GetWindowLongW(hwndForEmbed, GWL_STYLE);
-		//SetWindowLongW(hwndForEmbed, GWL_STYLE, (dwStyle & ~(WS_GROUP|WS_TABSTOP)));
-
-		GetWindowRect(hwndForEmbed, &rc);
-		POINT pt = { rc.left, rc.top };
-		SIZE s = { rc.right - rc.left, rc.bottom - rc.top };
-		ScreenToClient(hwndForEmbed, &pt);
-		GetClientRect(hwndForEmbed, &rc);
-		s.cx -= rc.right, s.cy -= rc.bottom;
-
-		if (GetWindowLongW(hwndForEmbed, GWL_STYLE) & WS_VSCROLL)
-		{
-			s.cx -= GetSystemMetrics(SM_CXVSCROLL);
-		}
-
-		_pt = pt, _s = s;
-
-		return SetWindowPos(hwndForEmbed, 0, pt.x, pt.y, cx + s.cx, cy + s.cy, SWP_FRAMECHANGED|SWP_SHOWWINDOW|SWP_NOZORDER);
+		return FALSE;
 	}
 
 	LRESULT OnPaint(HWND hwnd)
@@ -125,7 +109,7 @@ class ShellWnd : public ZWnd
 				{
 				case SIZE_RESTORED:
 				case SIZE_MAXIMIZED:
-					DbgPrint("(%d, %d) [%u * %u]\n", _pt.x, _pt.y, _s.cx + LOWORD(lParam), _s.cy + HIWORD(lParam));
+					//DbgPrint("(%d, %d) [%u * %u]\n", _pt.x, _pt.y, _s.cx + LOWORD(lParam), _s.cy + HIWORD(lParam));
 					MoveWindow(hwnd, _pt.x, _pt.y, _s.cx + LOWORD(lParam), _s.cy + HIWORD(lParam), TRUE);
 					break;
 				}
