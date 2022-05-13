@@ -51,7 +51,7 @@ class ShellWnd : public ZWnd
 	POINT _pt;
 	SIZE _s;
 
-	BOOL RedirectParent(_In_ HWND hwnd, _In_ HWND hwndForEmbed)
+	BOOL RedirectParent(_In_ HWND hwnd, _In_ HWND hwndForEmbed, _In_ int cx, _In_ int cy)
 	{
 		if (!SetParent(hwndForEmbed, hwnd))
 		{
@@ -59,9 +59,7 @@ class ShellWnd : public ZWnd
 			return FALSE;
 		}
 
-		RECT rc, rcw;
-
-		GetClientRect(hwnd, &rc);
+		RECT rc;
 
 		//ULONG dwStyle = GetWindowLongW(hwndForEmbed, GWL_EXSTYLE);
 
@@ -70,12 +68,12 @@ class ShellWnd : public ZWnd
 		//dwStyle = GetWindowLongW(hwndForEmbed, GWL_STYLE);
 		//SetWindowLongW(hwndForEmbed, GWL_STYLE, (dwStyle & ~(WS_GROUP|WS_TABSTOP)));
 
-		GetWindowRect(hwndForEmbed, &rcw);
-		POINT pt = { rcw.left, rcw.top };
-		SIZE s = { rcw.right - rcw.left, rcw.bottom - rcw.top };
+		GetWindowRect(hwndForEmbed, &rc);
+		POINT pt = { rc.left, rc.top };
+		SIZE s = { rc.right - rc.left, rc.bottom - rc.top };
 		ScreenToClient(hwndForEmbed, &pt);
-		GetClientRect(hwndForEmbed, &rcw);
-		s.cx -= rcw.right, s.cy -= rcw.bottom;
+		GetClientRect(hwndForEmbed, &rc);
+		s.cx -= rc.right, s.cy -= rc.bottom;
 
 		if (GetWindowLongW(hwndForEmbed, GWL_STYLE) & WS_VSCROLL)
 		{
@@ -84,8 +82,7 @@ class ShellWnd : public ZWnd
 
 		_pt = pt, _s = s;
 
-		return SetWindowPos(hwndForEmbed, 0, pt.x, pt.y, rc.right + s.cx, rc.bottom + s.cy, 
-			SWP_FRAMECHANGED|SWP_SHOWWINDOW|SWP_NOZORDER);
+		return SetWindowPos(hwndForEmbed, 0, pt.x, pt.y, cx + s.cx, cy + s.cy, SWP_FRAMECHANGED|SWP_SHOWWINDOW|SWP_NOZORDER);
 	}
 
 	LRESULT OnPaint(HWND hwnd)
@@ -134,7 +131,7 @@ class ShellWnd : public ZWnd
 			return OnPaint(hwnd);
 
 		case WM_NCCREATE:
-			if (RedirectParent(hwnd, _hwnd))
+			if (RedirectParent(hwnd, _hwnd, reinterpret_cast<CREATESTRUCTW*>(lParam)->cx, reinterpret_cast<CREATESTRUCTW*>(lParam)->cy))
 			{
 				if (_pfi = new FOCUS_INFO(reinterpret_cast<CREATESTRUCTW*>(lParam)->hwndParent, _hwnd))
 				{
