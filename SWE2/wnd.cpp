@@ -8,6 +8,8 @@ _NT_BEGIN
 LIST_ENTRY gwndList = { &gwndList, &gwndList };
 HWINEVENTHOOK hWinEventHook = 0;
 
+LONG dwListRef;
+
 struct FOCUS_INFO : LIST_ENTRY
 {
 	HWND hwndChild;
@@ -25,6 +27,28 @@ struct FOCUS_INFO : LIST_ENTRY
 	}
 };
 
+void RefList()
+{
+	++dwListRef;
+}
+
+void ReleaseList()
+{
+	if (!--dwListRef)
+	{
+		PLIST_ENTRY entry = gwndList.Flink;
+
+		while (entry != &gwndList)
+		{
+			FOCUS_INFO* pi = static_cast<FOCUS_INFO*>(entry);
+
+			entry = entry->Flink;
+
+			delete pi;
+		}
+	}
+}
+
 void WINAPI DoneShl()
 {
 	if (hWinEventHook)
@@ -32,16 +56,7 @@ void WINAPI DoneShl()
 		UnhookWinEvent(hWinEventHook);
 	}
 
-	PLIST_ENTRY entry = gwndList.Flink;
-
-	while (entry != &gwndList)
-	{
-		FOCUS_INFO* pi = static_cast<FOCUS_INFO*>(entry);
-
-		entry = entry->Flink;
-
-		delete pi;
-	}
+	ReleaseList();
 }
 
 class ShellWnd : public ZWnd
@@ -110,6 +125,7 @@ class ShellWnd : public ZWnd
 				{
 				case SIZE_RESTORED:
 				case SIZE_MAXIMIZED:
+					DbgPrint("(%d, %d) [%u * %u]\n", _pt.x, _pt.y, _s.cx + LOWORD(lParam), _s.cy + HIWORD(lParam));
 					MoveWindow(hwnd, _pt.x, _pt.y, _s.cx + LOWORD(lParam), _s.cy + HIWORD(lParam), TRUE);
 					break;
 				}
@@ -122,6 +138,7 @@ class ShellWnd : public ZWnd
 			{
 				delete pfi;
 			}
+			ReleaseList();
 			break;
 
 		case WM_ERASEBKGND:
@@ -131,6 +148,7 @@ class ShellWnd : public ZWnd
 			return OnPaint(hwnd);
 
 		case WM_NCCREATE:
+			RefList();
 			if (RedirectParent(hwnd, _hwnd, reinterpret_cast<CREATESTRUCTW*>(lParam)->cx, reinterpret_cast<CREATESTRUCTW*>(lParam)->cy))
 			{
 				if (_pfi = new FOCUS_INFO(reinterpret_cast<CREATESTRUCTW*>(lParam)->hwndParent, _hwnd))
@@ -214,6 +232,8 @@ VOID CALLBACK WinEventProc(
 
 HRESULT WINAPI InitShl()
 {
+	dwListRef = 1;
+
 	if (hWinEventHook = SetWinEventHook(EVENT_OBJECT_FOCUS, EVENT_OBJECT_FOCUS, 
 		0, WinEventProc, 0, 0, WINEVENT_OUTOFCONTEXT| WINEVENT_SKIPOWNPROCESS  ))
 	{
