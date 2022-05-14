@@ -1,7 +1,5 @@
 #pragma once
 
-enum { aRedirect = 0x782303DE, aUnparent, aSetParent, aGetInfo };
-
 struct ITask
 {
 	HWND _hwnd;
@@ -36,29 +34,9 @@ struct ITask
 	HRESULT Create(_In_ HANDLE CompletionPort, _In_ PPROCESS_INFORMATION lpProcessInformation);
 };
 
-struct __declspec(novtable) IExecTask : public IUnknown
-{
-	virtual HRESULT STDMETHODCALLTYPE Start() = 0;
-
-	virtual HRESULT STDMETHODCALLTYPE Stop() = 0;
-
-	virtual HRESULT STDMETHODCALLTYPE Exec(_In_opt_ PCWSTR lpApplicationName, 
-		_In_opt_ PCWSTR lpCommandLine, 
-		_In_opt_ PCWSTR lpCurrentDirectory,
-		_Out_ PPROCESS_INFORMATION lpProcessInformation) = 0;
-
-	virtual HRESULT STDMETHODCALLTYPE EmbedTask(_In_opt_ HWND hwnd, 
-		_In_ PPROCESS_INFORMATION lpProcessInformation,
-		_Out_ ITask** ppTask) = 0;
-
-	virtual void STDMETHODCALLTYPE Cleanup(_In_ PPROCESS_INFORMATION lpProcessInformation) = 0; 
-};
-
-HRESULT CreateTaskMngr(_Out_ IExecTask** ppExec);
-
 void CleanupWinEvents(HWINEVENTHOOK hWinEventHook);
 
-HRESULT AddParentInfo(_In_ HWND hwnd, _In_ PPROCESS_INFORMATION lpProcessInformation);
+HRESULT AddParentInfo(_In_ HWND hwnd, _In_ PPROCESS_INFORMATION lpProcessInformation, _In_ ITask* pTask);
 
 VOID CALLBACK WinEventProc(
 						   HWINEVENTHOOK /*hWinEventHook*/,

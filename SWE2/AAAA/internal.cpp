@@ -16,9 +16,11 @@ bool ITask::OnIoCompletion(OVERLAPPED* dwProcessId, ULONG MessageId)
 		break;
 	case JOB_OBJECT_MSG_NEW_PROCESS:
 		DbgPrint("%p - NEW_PROCESS\n", dwProcessId);
+		PostMessageW(_hwnd, WM_USER, (ULONG_PTR)dwProcessId, JOB_OBJECT_MSG_NEW_PROCESS);
 		break;
 	case JOB_OBJECT_MSG_EXIT_PROCESS:
 		DbgPrint("%p - EXIT_PROCESS\n", dwProcessId);
+		PostMessageW(_hwnd, WM_USER, (ULONG_PTR)dwProcessId, JOB_OBJECT_MSG_EXIT_PROCESS);
 		break;
 	case JOB_OBJECT_MSG_ABNORMAL_EXIT_PROCESS:
 		DbgPrint("%p - ABNORMAL_EXIT_PROCESS\n", dwProcessId);

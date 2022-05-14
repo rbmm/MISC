@@ -78,6 +78,7 @@ int ShowErrorBox(HWND hWnd, PCWSTR lpCaption, HRESULT dwError, UINT uType)
 class ZShellFrame : public ZMDIChildFrame
 {
 	ITask* _pTask = 0;
+	HWND _hwnd = 0;
 
 	virtual HWND CreateView(HWND /*hWndParent*/, int /*nWidth*/, int /*nHeight*/, PVOID /*lpCreateParams*/)
 	{
@@ -107,7 +108,7 @@ class ZShellFrame : public ZMDIChildFrame
 		{
 			if (!IsRectEmpty(&ps.rcPaint))
 			{
-				FillRect(ps.hdc, &ps.rcPaint, (HBRUSH)(1 + COLOR_INFOBK));
+				FillRect(ps.hdc, &ps.rcPaint, (HBRUSH)(1 + COLOR_GRADIENTINACTIVECAPTION));
 			}
 			EndPaint(hwnd, &ps);
 		}
@@ -121,10 +122,27 @@ class ZShellFrame : public ZMDIChildFrame
 		case WM_NULL:
 			switch (wParam)
 			{
-			case aRedirect:
-				DbgPrint("====== SetParent(%p)\n", lParam);
-				RedirectParent(hwnd, (HWND)lParam);
+			case aUnparent:
+				if (hwnd = _hwndView)
+				{
+					_hwndView = 0;
+					_hwnd = (HWND)SendMessageW(hwnd, WM_PARENTNOTIFY, WM_NCDESTROY, 0);
+					DestroyWindow(hwnd);
+				}
 				break;
+			case aSetParent:
+				if (lParam = (LPARAM)_hwnd)
+				{
+					_hwnd = 0;
+					ShowWindow((HWND)lParam, SW_HIDE);
+			case aRedirect:
+					DbgPrint("====== SetParent(%p)\n", lParam);
+					RedirectParent(hwnd, (HWND)lParam);
+				}
+				break;
+			case aGetInfo:
+				*(HWND*)lParam = _hwndView;
+				return (LPARAM)_hwnd;
 			}
 			break;
 
@@ -141,6 +159,18 @@ class ZShellFrame : public ZMDIChildFrame
 
 		case WM_PAINT:
 			return OnPaint(hwnd);
+
+		case WM_USER:
+			switch (lParam)
+			{
+			case JOB_OBJECT_MSG_NEW_PROCESS:
+				DbgPrint("++ pid=%x\n", wParam);
+				break;
+			case JOB_OBJECT_MSG_EXIT_PROCESS:
+				DbgPrint("-- pid=%x\n", wParam);
+				break;
+			}
+			break;
 		}
 
 		return __super::WindowProc(hwnd, uMsg, wParam, lParam);
@@ -313,10 +343,52 @@ class ZMainWnd : public ZMDIFrameWnd
 			case ID_WINDOW_NEW:
 				OnNewWindow(hwnd);
 				break;
+			case ID_WINDOW_UNEMBED:
+				if (hwnd = GetActive())
+				{
+					SendMessageW(hwnd, WM_NULL, aUnparent, 0);
+				}
+				break;
+			case ID_WINDOW_EMBED:
+				if (hwnd = GetActive())
+				{
+					SendMessageW(hwnd, WM_NULL, aSetParent, 0);
+				}
+				break;
 			}
 			break;
 		}
 		return __super::WindowProc(hwnd, uMsg, wParam, lParam);
+	}
+
+	virtual void OnIdle()
+	{
+		__super::OnIdle();
+
+		UINT bU = MF_BYCOMMAND|MF_DISABLED, bP = MF_BYCOMMAND|MF_DISABLED;
+
+		ULONG n = 1;
+
+		if (HWND hwnd = GetActive())
+		{
+			n = 2;
+
+			if (SendMessageW(hwnd, WM_NULL, aGetInfo, (LPARAM)&hwnd))
+			{
+				bP = MF_BYCOMMAND|MF_ENABLED;
+			}
+
+			if (hwnd)
+			{
+				bU = MF_BYCOMMAND|MF_ENABLED;
+			}
+
+		}
+		if (HMENU hmenu = GetSubMenu(getMenu(), n))
+		{
+			EnableMenuItem(hmenu, ID_WINDOW_UNEMBED, bU);
+			EnableMenuItem(hmenu, ID_WINDOW_EMBED, bP);
+		}
 	}
 
 	virtual PCUNICODE_STRING getPosName()

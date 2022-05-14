@@ -113,6 +113,8 @@ struct IOPort : public IExecTask
 		_Out_ PPROCESS_INFORMATION lpProcessInformation)
 	{
 		STARTUPINFOW si = { sizeof(si) };
+		si.wShowWindow = SW_HIDE;
+		si.dwFlags = STARTF_USESHOWWINDOW;
 
 		return GetLastHr(CreateProcessW(lpApplicationName, const_cast<PWSTR>(lpCommandLine), 
 			0, 0, 0, CREATE_SUSPENDED, 0, lpCurrentDirectory, &si, lpProcessInformation));
