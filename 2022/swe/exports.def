@@ -1,0 +1,7 @@
+LIBRARY	"swe"
+
+EXPORTS
+
+InitShl
+CreateShlWnd
+DoneShl
