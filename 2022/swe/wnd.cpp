@@ -277,6 +277,7 @@ VOID CALLBACK WinEventProc(
 				{
 					BringWindowToTop(GetAncestor(hwnd = static_cast<FOCUS_INFO*>(entry)->hwndParent, GA_ROOT));
 					SetFocus(hwnd);
+					SendMessageW(hwnd, WM_PARENTNOTIFY, WM_SETFOCUS, 0);
 					do 
 					{
 						SendMessageW(hwnd, WM_NCACTIVATE, TRUE, 0);
