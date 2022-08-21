@@ -713,12 +713,6 @@ BOOLEAN CALLBACK MdlWriteComplete (
 	return FsRtlMdlWriteCompleteDev(FileObject, FileOffset, MdlChain, DeviceObject);
 }
 
-void CALLBACK DriverUnload(PDRIVER_OBJECT DriverObject)
-{
-	IoDeleteDevice(DriverObject->DeviceObject);
-	DbgPrint("DriverUnload(%p)\r\n", DriverObject);
-}
-
 NTSTATUS CALLBACK NotImpl(PDEVICE_OBJECT /*DeviceObject*/, PIRP Irp)
 {
 	PIO_STACK_LOCATION IrpSp = IoGetCurrentIrpStackLocation(Irp);
