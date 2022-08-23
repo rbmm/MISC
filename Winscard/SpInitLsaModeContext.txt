@@ -1,0 +1,287 @@
+tspkg.DLL!long SpInitLsaModeContext(unsigned __int64,unsigned __int64,_UNICODE_STRING *,unsigned long,unsigned long,_SecBufferDesc *,unsigned __int64 *,_SecBufferDesc *,unsigned long *,_LARGE_INTEGER *,unsigned char *,_SecBuffer *) + 82e
+  SspiCli.dll!InitializeSecurityContextW + 70
+    SspiCli.dll!long InitializeSecurityContextCommon(_SecHandle *,_SecHandle *,void *,unsigned long,unsigned long,unsigned long,_SecBufferDesc *,unsigned long,_SecHandle *,_SecBufferDesc *,unsigned long *,_LARGE_INTEGER *,unsigned char) + 195
+      SspiCli.dll!long LsaInitializeSecurityContextW(_SecHandle *,_SecHandle *,unsigned short *,unsigned long,unsigned long,unsigned long,_SecBufferDesc *,unsigned long,_SecHandle *,_SecBufferDesc *,unsigned long *,_LARGE_INTEGER *) + 5a
+        SspiCli.dll!long LsaInitializeSecurityContextCommon(_SecHandle *,_SecHandle *,unsigned short *,unsigned long,unsigned long,unsigned long,_SecBufferDesc *,unsigned long,_SecHandle *,_SecBufferDesc *,unsigned long *,_LARGE_INTEGER *,unsigned char) + 1f2
+          SspiCli.dll!SspipProcessSecurityContext + 833
+            SspiSrv.dll!SspirProcessSecurityContext + 273
+              lsasrv.dll!SspiExProcessSecurityContext + a3d
+                lsasrv.dll!WLsaInitContext + 4a4
+                  lsasrv.dll!long NegInitLsaModeContext(unsigned __int64,unsigned __int64,_UNICODE_STRING *,unsigned long,unsigned long,_SecBufferDesc *,unsigned __int64 *,_SecBufferDesc *,unsigned long *,_LARGE_INTEGER *,unsigned char *,_SecBuffer *) + 35b
+                    lsasrv.dll!long NegGenerateInitialToken(unsigned __int64,_UNICODE_STRING *,unsigned long,unsigned long,_SecBufferDesc *,unsigned __int64 *,_SecBufferDesc *,unsigned long *,_LARGE_INTEGER *,unsigned char *,_SecBuffer *) + 51
+                      lsasrv.dll!long NegBuildRequestToken(int,_SecBufferDesc *,_NEG_CREDS *,_UNICODE_STRING *,unsigned long,unsigned long,MechTypeList *,_NEG_CONTEXT * *,_SecBufferDesc *,_LARGE_INTEGER *) + efd
+                        lsasrv.dll!WLsaInitContext + 4a4
+                          kerberos.DLL!SpInitLsaModeContext + cfb
+                            kerberos.DLL!long KerbReferenceCredentialEx(unsigned __int64,unsigned long,unsigned char,int,_KERB_CREDENTIAL * *) + 531
+                              kerberos.DLL!long KerbGetTgtForService(_KERB_LOGON_SESSION *,_KERB_CREDENTIAL *,_KERB_CREDMAN_CRED *,_KERB_EXTRA_CRED *,_KERB_PROXY_LOGON_CRED *,_UNICODE_STRING *,_UNICODE_STRING *,unsigned long,_KERB_TICKET_CACHE_ENTRY * *,unsigned char *) + 34d
+                                kerberos.DLL!long KerbRefreshPrimaryTgt(_KERB_LOGON_SESSION *,_KERB_CREDENTIAL *,_KERB_CREDMAN_CRED *,_KERB_EXTRA_CRED *,_KERB_PROXY_LOGON_CRED *,_UNICODE_STRING *,unsigned long,_KERB_TICKET_CACHE_ENTRY *,unsigned char) + 126
+                                  kerberos.DLL!long KerbGetTicketForCredential(_KERB_LOGON_SESSION *,_KERB_CREDENTIAL *,_KERB_CREDMAN_CRED *,_KERB_EXTRA_CRED *,_KERB_PROXY_LOGON_CRED *,_UNICODE_STRING *,unsigned long) + 193
+                                    kerberos.DLL!long KerbGetTicketGrantingTicket(_KERB_LOGON_SESSION *,_KERB_CREDENTIAL *,_KERB_CREDMAN_CRED *,_KERB_EXTRA_CRED *,_KERB_PROXY_LOGON_CRED *,_UNICODE_STRING *,unsigned long,_KERB_TICKET_CACHE_ENTRY * *,_KERB_ENCRYPTION_KEY *,unsigned char) + 3f
+                                      kerberos.DLL!long KerbGetAuthenticationTicketEx(_KERB_LOGON_SESSION *,_KERB_CREDENTIAL *,_KERB_CREDMAN_CRED *,_KERB_EXTRA_CRED *,_KERB_PROXY_LOGON_CRED *,unsigned char,unsigned long,unsigned char *,_KERB_INTERNAL_NAME *,_UNICODE_STRING *,_KERB_INTERNAL_NA
+                                        kerberos.DLL!long KerbInitializePkCreds(_KERB_PRIMARY_CREDENTIAL *,_UNICODE_STRING *) + 221
+                                          kerberos.DLL!ScHelperCryptAcquireCertificatePrivateKey + 2b
+                                            CRYPT32.dll!CryptAcquireCertificatePrivateKey + f9
+                                              CRYPT32.dll!int AcquireKeyContext(_CERT_CONTEXT const *,unsigned long,_CRYPT_KEY_PROV_INFO *,HWND__ *,_CERT_KEY_CONTEXT *,int *) + 56
+                                                CRYPT32.dll!int I_CryptCAPI1AcquireKeyContext(_CERT_CONTEXT const *,unsigned long,_CRYPT_KEY_PROV_INFO *,HWND__ *,_CERT_KEY_CONTEXT *) + cd
+                                                  CRYPTSP.dll!CryptAcquireContextW + 98
+                                                    CRYPTSP.dll!CryptAcquireContextA + 5db
+                                                      basecsp.dll!CPAcquireContext + 9
+                                                        basecsp.dll!CPAcquireContextInternal + 156
+                                                          basecsp.dll!CPAcquireContextW + 9
+                                                            basecsp.dll!CPAcquireContextWInternal + 2cd
+                                                              basecsp.dll!unsigned long LocalAcquireContext(_USER_CONTEXT *,int *) + 3fe
+                                                                basecsp.dll!FindCard + 7b
+                                                                  basecsp.dll!SearchInCachedCardStates + 1f0
+                                                                    basecsp.dll!ValidateCardHandle + bc
+                                                                      SCardGetStatusChangeW
+                                                                    SCardConnectW
+                                                                  basecsp.dll!SearchInCachedCardStates + 311
+                                                                    basecsp.dll!unsigned long MatchBySerialAndUserParameters(_CARD_MATCH_DATA *,_CARD_STATE *) + 7a
+                                                                      basecsp.dll!unsigned long ReadCardSerialNumber(_CARD_STATE *,unsigned char * *,unsigned long *) + bc
+                                                                        basecsp.dll!GetCardProperty + b1
+                                                                          msclmd.dll!unsigned long CardGetProperty(_CARD_DATA *,unsigned short const *,unsigned char *,unsigned long,unsigned long *,unsigned long) + b28
+                                                                            msclmd.dll!unsigned long I_RouteReadFile(_CARD_DATA *,char *,char *,unsigned char * *,unsigned long *) + 274
+                                                                              msclmd.dll!unsigned long I_ReadButterflyFile(_CARD_DATA *,char *,char *,unsigned char * *,unsigned long *) + 99
+                                                                                msclmd.dll!unsigned long I_GetButterflyFileLocation(_CARD_DATA *,char *,char *,unsigned short *,unsigned long *) + 1a0
+                                                                                  msclmd.dll!static GidsFileSystem<_CARD_DATA *> * GidsFileSystem<_CARD_DATA *>::CreateInstance(void * (*)(unsigned __int64),void (*)(void *),unsigned long (*)(_CARD_DATA *,unsigned short,unsigned long,unsigned char * *,unsigned long *,int),unsigned long (*
+                                                                                    msclmd.dll!unsigned long I_ReadFile(_CARD_DATA *,unsigned short,unsigned long,unsigned char * *,unsigned long *,int) + 267
+                                                                                      msclmd.dll!unsigned long I_GetData(_CARD_DATA *,unsigned short,unsigned long,unsigned char * *,unsigned long *) + 3b9
+                                                                                        msclmd.dll!unsigned long I_ClmdCmdTransmit(_CARD_DATA *,unsigned char,unsigned char,unsigned char,unsigned char,unsigned char *,unsigned long,unsigned char * *,unsigned long *,unsigned short *,int) + 3b2
+                                                                                          SCardTransmit
+                                                                              msclmd.dll!unsigned long I_ReadButterflyFile(_CARD_DATA *,char *,char *,unsigned char * *,unsigned long *) + 114
+                                                                                msclmd.dll!unsigned long I_ReadFile(_CARD_DATA *,unsigned short,unsigned long,unsigned char * *,unsigned long *,int) + 267
+                                                                                  msclmd.dll!unsigned long I_GetData(_CARD_DATA *,unsigned short,unsigned long,unsigned char * *,unsigned long *) + 3b9
+                                                                                    msclmd.dll!unsigned long I_ClmdCmdTransmit(_CARD_DATA *,unsigned char,unsigned char,unsigned char,unsigned char,unsigned char *,unsigned long,unsigned char * *,unsigned long *,unsigned short *,int) + 3b2
+                                                                                      SCardTransmit
+                                                                    basecsp.dll!unsigned long MatchBySerialAndUserParameters(_CARD_MATCH_DATA *,_CARD_STATE *) + 168
+                                                                      basecsp.dll!unsigned long MatchByUserParameters(_CARD_MATCH_DATA *,_CARD_STATE *) + 216
+                                                                        basecsp.dll!unsigned long MatchesRequiredForOpenKeySet(_CARD_STATE *,unsigned short *,unsigned char *) + 77
+                                                                          basecsp.dll!unsigned long MatchesRequiredContainerNameInCard(_CARD_STATE *,unsigned short *,unsigned char *) + a9
+                                                                            basecsp.dll!ContainerMapFindContainer + 3a
+                                                                              basecsp.dll!I_ContainerMapFind + 5c
+                                                                                basecsp.dll!CspReadFile + cc
+                                                                                  basecsp.dll!GetCachedCardData + 74
+                                                                                    basecsp.dll!CspQueryCardCacheForItem + 105
+                                                                                      basecsp.dll!unsigned long I_CspReadCardCacheFile(_CARD_STATE *,_CARD_CACHE_FILE_FORMAT *) + ba
+                                                                                        msclmd.dll!unsigned long CardReadFile(_CARD_DATA *,char *,char *,unsigned long,unsigned char * *,unsigned long *) + 46f
+                                                                                          msclmd.dll!unsigned long I_RouteReadFile(_CARD_DATA *,char *,char *,unsigned char * *,unsigned long *) + 274
+                                                                                            msclmd.dll!unsigned long I_ReadButterflyFile(_CARD_DATA *,char *,char *,unsigned char * *,unsigned long *) + 99
+                                                                                              msclmd.dll!unsigned long I_GetButterflyFileLocation(_CARD_DATA *,char *,char *,unsigned short *,unsigned long *) + 1a0
+                                                                                                msclmd.dll!static GidsFileSystem<_CARD_DATA *> * GidsFileSystem<_CARD_DATA *>::CreateInstance(void * (*)(unsigned __int64),void (*)(void *),unsigned long (*)(_CARD_DATA *,unsigned short,unsigned long,unsigned char * *,unsigned long *,int),unsigned long (*
+                                                                                                  msclmd.dll!unsigned long I_ReadFile(_CARD_DATA *,unsigned short,unsigned long,unsigned char * *,unsigned long *,int) + 267
+                                                                                                    msclmd.dll!unsigned long I_GetData(_CARD_DATA *,unsigned short,unsigned long,unsigned char * *,unsigned long *) + 3b9
+                                                                                                      msclmd.dll!unsigned long I_ClmdCmdTransmit(_CARD_DATA *,unsigned char,unsigned char,unsigned char,unsigned char,unsigned char *,unsigned long,unsigned char * *,unsigned long *,unsigned short *,int) + 3b2
+                                                                                                        SCardTransmit
+                                                                                            msclmd.dll!unsigned long I_ReadButterflyFile(_CARD_DATA *,char *,char *,unsigned char * *,unsigned long *) + 114
+                                                                                              msclmd.dll!unsigned long I_ReadFile(_CARD_DATA *,unsigned short,unsigned long,unsigned char * *,unsigned long *,int) + 267
+                                                                                                msclmd.dll!unsigned long I_GetData(_CARD_DATA *,unsigned short,unsigned long,unsigned char * *,unsigned long *) + 3b9
+                                                                                                  msclmd.dll!unsigned long I_ClmdCmdTransmit(_CARD_DATA *,unsigned char,unsigned char,unsigned char,unsigned char,unsigned char *,unsigned long,unsigned char * *,unsigned long *,unsigned short *,int) + 3b2
+                                                                                                    SCardTransmit
+                                                                                    basecsp.dll!CspQueryCardCacheForItem + 132
+                                                                                      SCardReadCacheW
+                                                                                      SCardFreeMemory
+                                                                      basecsp.dll!unsigned long MatchByUserParameters(_CARD_MATCH_DATA *,_CARD_STATE *) + 290
+                                                                        basecsp.dll!unsigned long GetCardPinInformation(_CARD_MATCH_DATA *,_CARD_STATE *) + 103
+                                                                          basecsp.dll!GetCachedCardContainerProperty + c3
+                                                                            basecsp.dll!CspQueryCardCacheForItem + 132
+                                                                              SCardReadCacheW
+                                                                              SCardFreeMemory
+                                                              basecsp.dll!unsigned long LocalAcquireContext(_USER_CONTEXT *,int *) + 6a1
+                                                                basecsp.dll!ContainerMapFindContainer + 3a
+                                                                  basecsp.dll!I_ContainerMapFind + 5c
+                                                                    basecsp.dll!CspReadFile + cc
+                                                                      basecsp.dll!GetCachedCardData + 74
+                                                                        basecsp.dll!CspQueryCardCacheForItem + 132
+                                                                          SCardReadCacheW
+                                                                          SCardFreeMemory
+                                                              basecsp.dll!unsigned long LocalAcquireContext(_USER_CONTEXT *,int *) + 6be
+                                                                basecsp.dll!CspCheckContainerMapRecordIsRsa + 54
+                                                                  basecsp.dll!CspGetContainerInfo + d0
+                                                                    basecsp.dll!CspQueryCardCacheForItem + 132
+                                                                      SCardReadCacheW
+                                                                      SCardFreeMemory
+                                        kerberos.DLL!long KerbInitializePkCreds(_KERB_PRIMARY_CREDENTIAL *,_UNICODE_STRING *) + 2af
+                                          kerberos.DLL!long KerbSetPin(_KERB_PUBLIC_KEY_CREDENTIALS *) + 3e3
+                                            CRYPTSP.dll!CryptSetProvParam + ff
+                                              basecsp.dll!CPSetProvParam + 52
+                                                basecsp.dll!unsigned long LocalSetProvParam(_USER_CONTEXT *,unsigned long,unsigned char *,unsigned long,int *) + 409
+                                                  basecsp.dll!unsigned long BeginCardCapiCall(_USER_CONTEXT *,int) + c0
+                                                    basecsp.dll!ValidateCardHandle + bc
+                                                      SCardGetStatusChangeW
+                                                    SCardStatusW
+                                                    basecsp.dll!ValidateCardHandle + 319
+                                                      basecsp.dll!unsigned long I_UpdateCardState(_CARD_STATE *,unsigned short *,int) + e5
+                                                        SCardGetStatusChangeW
+                                                    SCardFreeMemory
+                                                basecsp.dll!unsigned long LocalSetProvParam(_USER_CONTEXT *,unsigned long,unsigned char *,unsigned long,int *) + 531
+                                                  basecsp.dll!unsigned long I_SetPin(_CARD_STATE *,_PIN_INFO *,unsigned long,_PINCACHE_PINS *) + ef
+                                                    basecsp.dll!PinCacheAdd + 1a6
+                                                      basecsp.dll!VerifyCachedPinCallback + 25
+                                                        basecsp.dll!CspAuthenticatePin + 2b8
+                                                          msclmd.dll!unsigned long CardAuthenticateEx(_CARD_DATA *,unsigned long,unsigned long,unsigned char *,unsigned long,unsigned char * *,unsigned long *,unsigned long *) + 475
+                                                            msclmd.dll!unsigned long I_SelectActiveApplication(_CARD_DATA *) + 19d
+                                                              msclmd.dll!unsigned long I_SelectDF(_CARD_DATA *) + 9d
+                                                                msclmd.dll!unsigned long I_ClmdCmdTransmit(_CARD_DATA *,unsigned char,unsigned char,unsigned char,unsigned char,unsigned char *,unsigned long,unsigned char * *,unsigned long *,unsigned short *,int) + 3b2
+                                                                  SCardTransmit
+                                                          msclmd.dll!unsigned long CardAuthenticateEx(_CARD_DATA *,unsigned long,unsigned long,unsigned char *,unsigned long,unsigned char * *,unsigned long *,unsigned long *) + 4d4
+                                                            msclmd.dll!unsigned long I_AuthenticatePin(_CARD_DATA *,unsigned char,unsigned char *,unsigned long,unsigned long *) + 18e
+                                                              msclmd.dll!unsigned long I_ClmdCmdTransmit(_CARD_DATA *,unsigned char,unsigned char,unsigned char,unsigned char,unsigned char *,unsigned long,unsigned char * *,unsigned long *,unsigned short *,int) + 3b2
+                                                                SCardTransmit
+                                                      SCardAudit
+                                                        SCardIsValidContext
+                                      kerberos.DLL!long KerbGetAuthenticationTicketEx(_KERB_LOGON_SESSION *,_KERB_CREDENTIAL *,_KERB_CREDMAN_CRED *,_KERB_EXTRA_CRED *,_KERB_PROXY_LOGON_CRED *,unsigned char,unsigned long,unsigned char *,_KERB_INTERNAL_NAME *,_UNICODE_STRING *,_KERB_INTERNAL_NA
+                                        kerberos.DLL!long KerbGetPreAuthDataForRealm(_KERB_LOGON_SESSION *,_KERB_PRIMARY_CREDENTIAL *,_UNICODE_STRING *,_KERB_INTERNAL_NAME *,_KERB_ENCRYPTION_KEY *,KERB_KDC_REQUEST_preauth_data_s *,_LARGE_INTEGER *,unsigned char,unsigned char,long,unsigned char,
+                                          kerberos.DLL!long KerbBuildPreAuthData(_KERB_LOGON_SESSION *,_KERB_PRIMARY_CREDENTIAL *,_UNICODE_STRING *,_KERB_INTERNAL_NAME *,_KERB_ENCRYPTION_KEY *,unsigned long,unsigned long *,KERB_KDC_REQUEST_preauth_data_s *,_LARGE_INTEGER *,unsigned char,unsigned 
+                                            kerberos.DLL!long KerbBuildPkinitPreauthData(_KERB_LOGON_SESSION *,_KERB_PRIMARY_CREDENTIAL *,unsigned long,KERB_KDC_REQUEST_preauth_data_s *,KERB_PA_DATA *,_LARGE_INTEGER *,_KERB_INTERNAL_NAME *,_UNICODE_STRING *,KERB_KDC_REQUEST_preauth_data_s * *,_KERB
+                                              kerberos.DLL!long ScHelperGetSmartCardAlgorithmsFromCard(_KERB_PRIMARY_CREDENTIAL *,KERB_KDC_REQUEST_BODY_encryption_type_s * *) + 87
+                                                CRYPTSP.dll!CryptGetProvParam + 70
+                                                  basecsp.dll!CPGetProvParam + 11
+                                                    basecsp.dll!CPGetProvParamInternal + 63
+                                                      basecsp.dll!unsigned long LocalGetProvParam(_USER_CONTEXT *,unsigned long,unsigned char *,unsigned long *,unsigned long,int *) + 499
+                                                        basecsp.dll!unsigned long BeginCardCapiCall(_USER_CONTEXT *,int) + c0
+                                                          basecsp.dll!ValidateCardHandle + bc
+                                                            SCardGetStatusChangeW
+                                                          SCardStatusW
+                                                          basecsp.dll!ValidateCardHandle + 319
+                                                            basecsp.dll!unsigned long I_UpdateCardState(_CARD_STATE *,unsigned short *,int) + e5
+                                                              SCardGetStatusChangeW
+                                                          SCardFreeMemory
+                                                      basecsp.dll!unsigned long LocalGetProvParam(_USER_CONTEXT *,unsigned long,unsigned char *,unsigned long *,unsigned long,int *) + 4c2
+                                                        basecsp.dll!unsigned long BuildSupportedAlgorithmsList(_USER_CONTEXT *) + 275
+                                                          basecsp.dll!CspQueryKeySizes + 9a
+                                                            basecsp.dll!GetCachedCardProperty + be
+                                                              basecsp.dll!CspQueryCardCacheForItem + 132
+                                                                SCardReadCacheW
+                                                                SCardFreeMemory
+                                                        basecsp.dll!unsigned long BuildSupportedAlgorithmsList(_USER_CONTEXT *) + 200
+                                                          basecsp.dll!CspQueryKeySizes + 9a
+                                                            basecsp.dll!GetCachedCardProperty + be
+                                                              basecsp.dll!CspQueryCardCacheForItem + 132
+                                                                SCardReadCacheW
+                                                                SCardFreeMemory
+                                                      basecsp.dll!unsigned long LocalGetProvParam(_USER_CONTEXT *,unsigned long,unsigned char *,unsigned long *,unsigned long,int *) + 499
+                                                        basecsp.dll!unsigned long BeginCardCapiCall(_USER_CONTEXT *,int) + c0
+                                                          basecsp.dll!ValidateCardHandle + bc
+                                                            SCardGetStatusChangeW
+                                                          SCardStatusW
+                                                          basecsp.dll!ValidateCardHandle + 319
+                                                            basecsp.dll!unsigned long I_UpdateCardState(_CARD_STATE *,unsigned short *,int) + e5
+                                                              SCardGetStatusChangeW
+                                                          SCardFreeMemory
+                                                          basecsp.dll!ValidateCardHandle + bc
+                                                            SCardGetStatusChangeW
+                                                          SCardStatusW
+                                                          basecsp.dll!ValidateCardHandle + 319
+                                                            basecsp.dll!unsigned long I_UpdateCardState(_CARD_STATE *,unsigned short *,int) + e5
+                                                              SCardGetStatusChangeW
+                                                          SCardFreeMemory
+                                                          basecsp.dll!ValidateCardHandle + bc
+                                                            SCardGetStatusChangeW
+                                                          SCardStatusW
+                                                          basecsp.dll!ValidateCardHandle + 319
+                                                            basecsp.dll!unsigned long I_UpdateCardState(_CARD_STATE *,unsigned short *,int) + e5
+                                                              SCardGetStatusChangeW
+                                                          SCardFreeMemory
+                                                          basecsp.dll!ValidateCardHandle + bc
+                                                            SCardGetStatusChangeW
+                                                          SCardStatusW
+                                                          basecsp.dll!ValidateCardHandle + 319
+                                                            basecsp.dll!unsigned long I_UpdateCardState(_CARD_STATE *,unsigned short *,int) + e5
+                                                              SCardGetStatusChangeW
+                                                          SCardFreeMemory
+                                            kerberos.DLL!long KerbBuildPkinitPreauthData(_KERB_LOGON_SESSION *,_KERB_PRIMARY_CREDENTIAL *,unsigned long,KERB_KDC_REQUEST_preauth_data_s *,KERB_PA_DATA *,_LARGE_INTEGER *,_KERB_INTERNAL_NAME *,_UNICODE_STRING *,KERB_KDC_REQUEST_preauth_data_s * *,_KERB
+                                              kerberos.DLL!long __ScHelperSignPkcsMessage(_KERB_PRIMARY_CREDENTIAL *,KerbKeyAgreement *,_CRYPT_ALGORITHM_IDENTIFIER *,unsigned char *,unsigned long,unsigned char * *,unsigned long *) + 80
+                                                kerberos.DLL!long KerbSetPin(_KERB_PUBLIC_KEY_CREDENTIALS *) + 3e3
+                                                  CRYPTSP.dll!CryptSetProvParam + ff
+                                                    basecsp.dll!CPSetProvParam + 52
+                                                      basecsp.dll!unsigned long LocalSetProvParam(_USER_CONTEXT *,unsigned long,unsigned char *,unsigned long,int *) + 409
+                                                        basecsp.dll!unsigned long BeginCardCapiCall(_USER_CONTEXT *,int) + c0
+                                                          basecsp.dll!ValidateCardHandle + bc
+                                                            SCardGetStatusChangeW
+                                                          SCardStatusW
+                                                          basecsp.dll!ValidateCardHandle + 319
+                                                            basecsp.dll!unsigned long I_UpdateCardState(_CARD_STATE *,unsigned short *,int) + e5
+                                                              SCardGetStatusChangeW
+                                                          SCardFreeMemory
+                                              kerberos.DLL!long __ScHelperSignPkcsMessage(_KERB_PRIMARY_CREDENTIAL *,KerbKeyAgreement *,_CRYPT_ALGORITHM_IDENTIFIER *,unsigned char *,unsigned long,unsigned char * *,unsigned long *) + 334
+                                                kerberos.DLL!virtual long KerbCspPrivateKey::SignPkcsMessage(KerbKeyAgreement *,_CERT_CONTEXT const *,_CERT_CONTEXT const * *,unsigned long,_CRYPT_ALGORITHM_IDENTIFIER *,char *,unsigned char *,unsigned long,unsigned char * *,unsigned long *) + 8d
+                                                  kerberos.DLL!ScHelperSignPkcsMessage + 57
+                                                    kerberos.DLL!int ScHelperCMSSignMessage(_CERT_CONTEXT const *,_CRYPT_ALGORITHM_IDENTIFIER *,unsigned char *,unsigned long,int,char *,_CERT_CONTEXT const * *,unsigned long,unsigned char * *,unsigned long *) + 36d
+                                                      CRYPT32.dll!CryptMsgUpdate + 5fb
+                                                        CRYPT32.dll!int ICM_UpdateEncodingSignedData(_CRYPT_MSG_INFO *,unsigned char const *,unsigned long,int) + 111
+                                                          CRYPT32.dll!int ICM_FillSignerEncodeEncryptedDigests(_CRYPT_MSG_INFO *,int) + 5c
+                                                            CRYPT32.dll!int ICM_FillSignerEncryptedDigest(SignerInfo *,char *,_SIGNER_ENCODE_DATA_INFO *,int,int) + 142
+                                                              CRYPT32.dll!int ICM_CAPI1AllocAndSignHash(unsigned __int64,unsigned long,unsigned long,unsigned long,_ICM_HASH_INFO *,int,unsigned char * *,unsigned long *) + 160
+                                                                CRYPTSP.dll!CryptSignHashA + a2
+                                                                  CRYPTSP.dll!LocalSignHashW + a7
+                                                                    basecsp.dll!CPSignHash + 69
+                                                                      basecsp.dll!unsigned long LocalSignHash(_HASH_CONTEXT *,unsigned long,unsigned long,unsigned char *,unsigned long *,int *) + f0
+                                                                        basecsp.dll!unsigned long BeginCardCapiCall(_USER_CONTEXT *,int) + c0
+                                                                          basecsp.dll!ValidateCardHandle + bc
+                                                                            SCardGetStatusChangeW
+                                                                          SCardStatusW
+                                                                          basecsp.dll!ValidateCardHandle + 319
+                                                                            basecsp.dll!unsigned long I_UpdateCardState(_CARD_STATE *,unsigned short *,int) + e5
+                                                                              SCardGetStatusChangeW
+                                                                          SCardFreeMemory
+                                                                      basecsp.dll!unsigned long LocalSignHash(_HASH_CONTEXT *,unsigned long,unsigned long,unsigned char *,unsigned long *,int *) + 121
+                                                                        basecsp.dll!unsigned long GetKeyModulusLength(_USER_CONTEXT *,unsigned long,int,unsigned long *) + 83
+                                                                          basecsp.dll!ContainerMapFindContainer + 3a
+                                                                            basecsp.dll!I_ContainerMapFind + 5c
+                                                                              basecsp.dll!CspReadFile + cc
+                                                                                basecsp.dll!GetCachedCardData + 74
+                                                                                  basecsp.dll!CspQueryCardCacheForItem + 132
+                                                                                    SCardReadCacheW
+                                                                                    SCardFreeMemory
+                                                              CRYPT32.dll!int ICM_CAPI1AllocAndSignHash(unsigned __int64,unsigned long,unsigned long,unsigned long,_ICM_HASH_INFO *,int,unsigned char * *,unsigned long *) + 19a
+                                                                CRYPTSP.dll!CryptSignHashA + a2
+                                                                  CRYPTSP.dll!LocalSignHashW + a7
+                                                                    basecsp.dll!CPSignHash + 69
+                                                                      basecsp.dll!unsigned long LocalSignHash(_HASH_CONTEXT *,unsigned long,unsigned long,unsigned char *,unsigned long *,int *) + f0
+                                                                        basecsp.dll!unsigned long BeginCardCapiCall(_USER_CONTEXT *,int) + c0
+                                                                          basecsp.dll!ValidateCardHandle + bc
+                                                                            SCardGetStatusChangeW
+                                                                          SCardStatusW
+                                                                          basecsp.dll!ValidateCardHandle + 319
+                                                                            basecsp.dll!unsigned long I_UpdateCardState(_CARD_STATE *,unsigned short *,int) + e5
+                                                                              SCardGetStatusChangeW
+                                                                          SCardFreeMemory
+                                                                      basecsp.dll!unsigned long LocalSignHash(_HASH_CONTEXT *,unsigned long,unsigned long,unsigned char *,unsigned long *,int *) + 121
+                                                                        basecsp.dll!unsigned long GetKeyModulusLength(_USER_CONTEXT *,unsigned long,int,unsigned long *) + 83
+                                                                          basecsp.dll!ContainerMapFindContainer + 3a
+                                                                            basecsp.dll!I_ContainerMapFind + 5c
+                                                                              basecsp.dll!CspReadFile + cc
+                                                                                basecsp.dll!GetCachedCardData + 74
+                                                                                  basecsp.dll!CspQueryCardCacheForItem + 132
+                                                                                    SCardReadCacheW
+                                                                                    SCardFreeMemory
+                                                                      basecsp.dll!unsigned long LocalSignHash(_HASH_CONTEXT *,unsigned long,unsigned long,unsigned char *,unsigned long *,int *) + 2a4
+                                                                        msclmd.dll!unsigned long CardSignData(_CARD_DATA *,_CARD_SIGNING_INFO *) + 2f3
+                                                                          msclmd.dll!unsigned long I_GICSCardSignData(_CARD_DATA *,_CARD_SIGNING_INFO *) + 244
+                                                                            msclmd.dll!unsigned long I_GetButterflyContainer(_CARD_DATA *,unsigned char,_CLMD_KEY_CONTAINER_ENTRY *) + cd
+                                                                              msclmd.dll!unsigned long I_KeyMgrGetTable(_CARD_DATA *,_CLMD_KEY_CONTAINER_ENTRY * *,unsigned long *) + 143
+                                                                                msclmd.dll!unsigned long I_ReadFile(_CARD_DATA *,unsigned short,unsigned long,unsigned char * *,unsigned long *,int) + 267
+                                                                                  msclmd.dll!unsigned long I_GetData(_CARD_DATA *,unsigned short,unsigned long,unsigned char * *,unsigned long *) + 3b9
+                                                                                    msclmd.dll!unsigned long I_ClmdCmdTransmit(_CARD_DATA *,unsigned char,unsigned char,unsigned char,unsigned char,unsigned char *,unsigned long,unsigned char * *,unsigned long *,unsigned short *,int) + 3b2
+                                                                                      SCardTransmit
+                                                                          msclmd.dll!unsigned long I_GICSCardSignData(_CARD_DATA *,_CARD_SIGNING_INFO *) + 2bf
+                                                                            msclmd.dll!unsigned long I_GetKeyAndAlgFromMapIndex(_CARD_DATA *,unsigned char,unsigned char *,unsigned char *,unsigned long *) + 48b
+                                                                              msclmd.dll!unsigned long I_GetButterflyContainer(_CARD_DATA *,unsigned char,_CLMD_KEY_CONTAINER_ENTRY *) + cd
+                                                                                msclmd.dll!unsigned long I_KeyMgrGetTable(_CARD_DATA *,_CLMD_KEY_CONTAINER_ENTRY * *,unsigned long *) + 143
+                                                                                  msclmd.dll!unsigned long I_ReadFile(_CARD_DATA *,unsigned short,unsigned long,unsigned char * *,unsigned long *,int) + 267
+                                                                                    msclmd.dll!unsigned long I_GetData(_CARD_DATA *,unsigned short,unsigned long,unsigned char * *,unsigned long *) + 3b9
+                                                                                      msclmd.dll!unsigned long I_ClmdCmdTransmit(_CARD_DATA *,unsigned char,unsigned char,unsigned char,unsigned char,unsigned char *,unsigned long,unsigned char * *,unsigned long *,unsigned short *,int) + 3b2
+                                                                                        SCardTransmit
+                                                                          msclmd.dll!unsigned long I_GICSCardSignData(_CARD_DATA *,_CARD_SIGNING_INFO *) + 6a8
+                                                                            msclmd.dll!unsigned long I_ManageSecurityEnvironment(_CARD_DATA *,unsigned char,unsigned char,unsigned char,int) + 120
+                                                                              msclmd.dll!unsigned long I_ClmdCmdTransmit(_CARD_DATA *,unsigned char,unsigned char,unsigned char,unsigned char,unsigned char *,unsigned long,unsigned char * *,unsigned long *,unsigned short *,int) + 3b2
+                                                                                SCardTransmit
+                                                                          msclmd.dll!unsigned long I_GICSCardSignData(_CARD_DATA *,_CARD_SIGNING_INFO *) + 730
+                                                                            msclmd.dll!unsigned long I_ClmdCmdTransmit(_CARD_DATA *,unsigned char,unsigned char,unsigned char,unsigned char,unsigned char *,unsigned long,unsigned char * *,unsigned long *,unsigned short *,int) + 3b2
+                                                                              SCardTransmit
+                                                                      basecsp.dll!unsigned long LocalSignHash(_HASH_CONTEXT *,unsigned long,unsigned long,unsigned char *,unsigned long *,int *) + 2c8
+                                                                        basecsp.dll!unsigned long I_MakePublicKeyHandle(_USER_CONTEXT *,int,unsigned __int64 *) + 4c
+                                                                          basecsp.dll!CspGetContainerInfo + d0
+                                                                            basecsp.dll!CspQueryCardCacheForItem + 132
+                                                                              SCardReadCacheW
+                                                                              SCardFreeMemory
