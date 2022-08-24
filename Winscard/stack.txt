@@ -1,0 +1,39 @@
+kerberos.dll!NetpSrvComparePriority + 47cf
+kerberos.dll!long KerbCredIsoApi::UnpackKdcReplyBody(KERB_ENCRYPTED_DATA *,_KERB_ENCRYPTION_KEY *,_KERB_ENCRYPTION_KEY *,unsigned long,unsigned long *,_KERB_ENCRYPTION_KEY * *,long *,KERB_ENCRYPTED_KDC_REPLY * *) + 1d71
+kerberos.dll!long KerbGetTgsTicketEx(_KERB_LOGON_SESSION *,_KERB_CREDENTIAL *,_KERB_PROXY_LOGON_CRED *,_KERB_TICKET_CACHE_ENTRY *,_KERB_INTERNAL_NAME *,unsigned long,unsigned long,unsigned long,PKERB_AUTHORIZATION_DATA_s *,KERB_PA_FOR_USER *,PA_S4U_X509_U
+kerberos.dll!long KerbGetTgsTicketWithBranchEx(_KERB_LOGON_SESSION *,_KERB_CREDENTIAL *,_KERB_CREDMAN_CRED *,_KERB_EXTRA_CRED *,_KERB_PROXY_LOGON_CRED *,_UNICODE_STRING *,_KERB_TICKET_CACHE_ENTRY *,_KERB_INTERNAL_NAME *,unsigned long,unsigned long,unsigne
+kerberos.dll!long KerbGetServiceTicketInternal(_KERB_LOGON_SESSION *,_KERB_CREDENTIAL *,_KERB_CREDMAN_CRED *,_KERB_EXTRA_CRED *,_KERB_PROXY_LOGON_CRED *,_KERB_INTERNAL_NAME *,_UNICODE_STRING *,_KERB_SPN_CACHE_ENTRY *,unsigned long,unsigned long,unsigned l
+kerberos.dll!long KerbGetServiceTicketEx(_KERB_LOGON_SESSION *,_KERB_CREDENTIAL *,_KERB_CREDMAN_CRED *,_KERB_EXTRA_CRED *,_KERB_PROXY_LOGON_CRED *,_KERB_INTERNAL_NAME *,_UNICODE_STRING *,_KERB_SPN_CACHE_ENTRY *,unsigned long,unsigned long,unsigned long,KE
+kerberos.dll!NetpSrvComparePriority + 15054
+lsasrv.dll!WLsaInitContext + 330
+lsasrv.dll!SspiExProcessSecurityContext + a7d
+sspisrv.dll!SspirProcessSecurityContext + 20f
+sspicli.dll!SspipProcessSecurityContext + 4d6
+sspicli.dll!long LsaInitializeSecurityContextCommon(_SecHandle *,_SecHandle *,unsigned short *,unsigned long,unsigned long,unsigned long,_SecBufferDesc *,unsigned long,_SecHandle *,_SecBufferDesc *,unsigned long *,_LARGE_INTEGER *,unsigned char) + 1ea
+sspicli.dll!long LsaInitializeSecurityContextW(_SecHandle *,_SecHandle *,unsigned short *,unsigned long,unsigned long,unsigned long,_SecBufferDesc *,unsigned long,_SecHandle *,_SecBufferDesc *,unsigned long *,_LARGE_INTEGER *) + 58
+sspicli.dll!long InitializeSecurityContextCommon(_SecHandle *,_SecHandle *,void *,unsigned long,unsigned long,unsigned long,_SecBufferDesc *,unsigned long,_SecHandle *,_SecBufferDesc *,unsigned long *,_LARGE_INTEGER *,unsigned char) + 19a
+sspicli.dll!InitializeSecurityContextW + 6e
+rpcrt4.dll!long SECURITY_CONTEXT::InitializeFirstTime(SECURITY_CREDENTIALS *,unsigned short *,unsigned long,_SecBufferDesc *,int) + 183
+rpcrt4.dll!long OSF_CCONNECTION::SendBindPacket(OSF_BINDING_HANDLE *,int,OSF_CCALL *,unsigned char,unsigned long,AssocGroupIdLockMode *,int,rpcconn_common * *,unsigned int *,rpcconn_common *,unsigned int) + 78b
+rpcrt4.dll!long OSF_CCONNECTION::ActuallyDoBinding(OSF_CCALL *,int,unsigned long,OSF_BINDING * *,int *,FAILURE_COUNT_STATE *) + db
+rpcrt4.dll!long OSF_CCONNECTION::OpenConnectionAndBind(OSF_BINDING_HANDLE *,unsigned long,int,FAILURE_COUNT_STATE *) + 1fc
+rpcrt4.dll!long OSF_CCALL::BindToServer(int) + d2
+rpcrt4.dll!long OSF_BINDING_HANDLE::InitCCallWithAssociation(_RPC_MESSAGE *,CLIENT_AUTH_INFO *,int,OSF_CCALL * *,int) + a5
+rpcrt4.dll!long OSF_BINDING_HANDLE::AllocateCCall(OSF_CCALL * *,_RPC_MESSAGE *,int *) + 243
+rpcrt4.dll!virtual long OSF_BINDING_HANDLE::NegotiateTransferSyntax(_RPC_MESSAGE *) + 2f
+rpcrt4.dll!NdrpClientCall3 + d24
+rpcrt4.dll!NdrClientCall3 + f2
+ntdsai.dll!getContextBindingHelper + 329
+ntdsai.dll!FBindSzDRSEx + 338
+ntdsai.dll!I_DRSGetMemberships + b3
+ntdsai.dll!I_DRSGetMembershipsFindGC + 119
+ntdsai.dll!SampGetMembershipsFromGC + 80
+ntdsai.dll!SampBuildAdministratorsSet + 131
+ntdsai.dll!SampProtectAdministratorsList + 4ec
+ntdsai.dll!ProtectAdminGroups + 12
+ntdsai.dll!TQ_InitTHSAndExecute + 4d
+ntdsai.dll!TaskScheduler + 152
+msvcrt.dll!_beginthreadex + 12a
+msvcrt.dll!_endthreadex + ac
+kernel32.dll!BaseThreadInitThunk + 14
+ntdll.dll!RtlUserThreadStart + 21
