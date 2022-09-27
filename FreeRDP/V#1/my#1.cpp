@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <malloc.h>
 
-#pragma warning(disable : 4706) // assignment within conditional expression
+#pragma warning(disable : 4706 4094) // assignment within conditional expression
 
 #define FreeRDP_ServerHostname (20)
 #define FreeRDP_Username (21)
@@ -48,15 +48,14 @@ void AddDefaultSettings_I(rdpSettings* settings, size_t idHostname, size_t idUse
 	}
 
 	PCREDENTIALA Credential;
+	PCWSTR lpWideCharStr;
 
-	union {
-		PSTR TargetName;
-		PSTR Password;
-		PSTR UserName;
-	};
+	PSTR Password;
+	PSTR UserName;
 
-	TargetName = 0;
+	PSTR TargetName = 0;
 	int len = 0;
+
 
 	while (0 < (len = _vsnprintf(TargetName, len, "TERMSRV/%s", (va_list)&ServerHostname)))
 	{
@@ -68,7 +67,7 @@ void AddDefaultSettings_I(rdpSettings* settings, size_t idHostname, size_t idUse
 				{
 					ULONG cch = Credential->CredentialBlobSize;
 
-					if (PCWSTR lpWideCharStr = ValidateString(Credential->CredentialBlob, cch))
+					if (lpWideCharStr = ValidateString(Credential->CredentialBlob, cch))
 					{
 						Password = 0, len = 0, cch /= sizeof(WCHAR);
 
@@ -102,6 +101,7 @@ void AddDefaultSettings_I(rdpSettings* settings, size_t idHostname, size_t idUse
 		TargetName = (PSTR)alloca(++len);
 	}
 }
+
 
 EXTERN_C void WINAPI AddDefaultSettings(_Inout_ rdpSettings* settings)
 {
