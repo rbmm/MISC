@@ -50,11 +50,12 @@ void AddDefaultSettings_I(rdpSettings* settings, size_t idHostname, size_t idUse
 	PCREDENTIALA Credential;
 
 	union {
-		PSTR TargetName = 0;
+		PSTR TargetName;
 		PSTR Password;
 		PSTR UserName;
 	};
 
+	TargetName = 0;
 	int len = 0;
 
 	while (0 < (len = _vsnprintf(TargetName, len, "TERMSRV/%s", (va_list)&ServerHostname)))
