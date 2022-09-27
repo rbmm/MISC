@@ -39,85 +39,7 @@
 
 #include <shellapi.h>
 
-PWSTR* WINAPI hook_CommandLineToArgvW(_In_ PCWSTR lpCmdLine, _Out_ int* pNumArgs)
-{
-	int argc;
-
-	if (PWSTR* args = CommandLineToArgvW(lpCmdLine, &argc))
-	{
-		PWSTR* buf = args;
-		*pNumArgs = argc;
-
-		if (argc)
-		{
-			do 
-			{
-				PWSTR arg = *args++;
-
-				if (*arg++ == '/' && *arg++ == 'v' && *arg++ == ':')
-				{
-					PWSTR TargetName = 0;
-					int cch = 0;
-					while (0 < (cch = _vsnwprintf(TargetName, cch, L"TERMSRV/%s", (va_list)&arg)))
-					{
-						if (TargetName)
-						{
-							if (PWSTR psz = wcschr(TargetName, ':'))
-							{
-								*psz = 0;
-							}
-
-							PCREDENTIALW Credential;
-
-							if (CredReadW(TargetName, CRED_TYPE_GENERIC, 0, &Credential))
-							{
-								if (PWSTR UserName = Credential->UserName)
-								{
-									if ((arg = (PWSTR)Credential->CredentialBlob) &&
-										(cch = Credential->CredentialBlobSize) && 
-										!(cch & (sizeof(WCHAR) - 1)) &&
-										!arg[cch - 1]
-									)
-									{
-										PWSTR aa[] = { GetCommandLineW(), UserName, arg };
-										cch = 0;
-										TargetName = 0;
-
-										while (0 < (cch = _vsnwprintf(TargetName, cch, L"%s \"/u:%s\" \"/p:%s\"", (va_list)aa)))
-										{
-											if (TargetName)
-											{
-												CredFree(Credential);
-												LocalFree(buf);
-												return CommandLineToArgvW(TargetName, pNumArgs);
-											}
-
-											TargetName = (PWSTR)alloca(++cch * sizeof(WCHAR));
-										}
-									}
-								}
-
-								CredFree(Credential);
-							}
-
-							break;
-						}
-
-						TargetName = (PWSTR)alloca(++cch * sizeof(WCHAR));
-					}
-
-					break;
-				}
-
-			} while (--argc);
-		}
-
-		return buf;
-	}
-
-	*pNumArgs = 0;
-	return 0;
-}
+EXTERN_C void WINAPI AddDefaultSettings(_Inout_ rdpSettings* settings);
 
 INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
@@ -150,7 +72,7 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	if (!cmd)
 		goto out;
 
-	args = hook_CommandLineToArgvW(cmd, &argc);
+	args = CommandLineToArgvW(cmd, &argc);
 
 	if (!args || (argc <= 0))
 		goto out;
@@ -186,6 +108,8 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		ret = freerdp_client_settings_command_line_status_print(settings, status, argc, argv);
 		goto out;
 	}
+
+	AddDefaultSettings(settings);
 
 	if (freerdp_client_start(context) != 0)
 		goto out;

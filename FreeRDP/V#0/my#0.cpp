@@ -1,61 +1,68 @@
-#include "stdafx.h"
+#include <Windows.h>
+#include <wincred.h>
+#include <shellapi.h>
+#include <stdio.h>
+#include <malloc.h>
 
-_NT_BEGIN
+#pragma warning(disable : 4706) // assignment within conditional expression
 
-enum { fNameNeed, fPasswordNeed };
+namespace {
 
-PCWSTR GetServerName(_In_ PWSTR* args, _In_ ULONG NumArgs, _Inout_ PLONG bits)
-{
-	PCWSTR ServerName = 0;
+	enum { fNameNeed, fPasswordNeed };
 
-	if (NumArgs)
+	PCWSTR GetServerName(_In_ PWSTR* args, _In_ ULONG NumArgs, _Inout_ PLONG bits)
 	{
-		do 
-		{
-			PCWSTR arg = *args++;
+		PCWSTR ServerName = 0;
 
-			switch (*arg++)
+		if (NumArgs)
+		{
+			do 
 			{
-			case '/':
-			case '-':
+				PCWSTR arg = *args++;
+
 				switch (*arg++)
 				{
-				case 'v': // Server hostname
-				case 'g': // Gateway Hostname ?
-					if (*arg == ':')
+				case '/':
+				case '-':
+					switch (*arg++)
 					{
-						ServerName = arg + 1;
-					}
-					break;
-				case 'p':
-					if (*arg == ':')
-					{
-						_bittestandreset(bits, fPasswordNeed);
-					}
-					break;
-				case 'u':
-					if (*arg == ':')
-					{
-						_bittestandreset(bits, fNameNeed);
+					case 'v': // Server hostname
+					case 'g': // Gateway Hostname ?
+						if (*arg == ':')
+						{
+							ServerName = arg + 1;
+						}
+						break;
+					case 'p':
+						if (*arg == ':')
+						{
+							_bittestandreset(bits, fPasswordNeed);
+						}
+						break;
+					case 'u':
+						if (*arg == ':')
+						{
+							_bittestandreset(bits, fNameNeed);
+						}
+						break;
 					}
 					break;
 				}
-				break;
-			}
 
-		} while (--NumArgs);
+			} while (--NumArgs);
+		}
+
+		return ServerName;
 	}
 
-	return ServerName;
-}
-
-PCWSTR ValidateString(const BYTE* pb, ULONG cb)
-{
-	return pb &&							// present ?
-		cb &&								// size not 0 ?
-		!(cb & (sizeof(WCHAR) - 1)) &&		// cb == n * sizeof(WCHAR) ?
-		!*(WCHAR*)(pb + cb - sizeof(WCHAR))	// 0 terminated ?
-		? (PCWSTR)pb : 0;					
+	PCWSTR ValidateString(const BYTE* pb, ULONG cb)
+	{
+		return pb &&							// present ?
+			cb &&								// size not 0 ?
+			!(cb & (sizeof(WCHAR) - 1)) &&		// cb == n * sizeof(WCHAR) ?
+			!*(WCHAR*)(pb + cb - sizeof(WCHAR))	// 0 terminated ?
+			? (PCWSTR)pb : 0;					
+	}
 }
 
 EXTERN_C PWSTR* WINAPI hook_CommandLineToArgvW(_In_ PCWSTR lpCmdLine, _Out_ int* pNumArgs)
@@ -166,40 +173,3 @@ EXTERN_C PWSTR* WINAPI hook_CommandLineToArgvW(_In_ PCWSTR lpCmdLine, _Out_ int*
 	*pNumArgs = argc;
 	return args;
 }
-
-EXTERN_C void** __fastcall findCTA(ULONG size, void** ppv);
-
-BOOLEAN DoHook()
-{
-	ULONG size;
-	if (void** ppv = (void**)RtlImageDirectoryEntryToData(GetModuleHandleW(0), TRUE, IMAGE_DIRECTORY_ENTRY_IAT, &size))
-	{
-		if (ppv = findCTA(size, ppv))
-		{
-			if (VirtualProtect(ppv, sizeof(PVOID), PAGE_READWRITE, &size))
-			{
-				*ppv = hook_CommandLineToArgvW;
-				if (size != PAGE_READWRITE) VirtualProtect(ppv, sizeof(PVOID), size, &size);
-				return TRUE;
-			}
-		}
-	}
-
-	return FALSE;
-}
-
-BOOLEAN APIENTRY DllMain( HMODULE hModule,
-						 DWORD  ul_reason_for_call,
-						 PVOID 
-						 )
-{
-	switch (ul_reason_for_call)
-	{
-	case DLL_PROCESS_ATTACH:
-		LdrDisableThreadCalloutsForDll(hModule);
-		return DoHook();
-	}
-	return FALSE;
-}
-
-_NT_END
