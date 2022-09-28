@@ -93,9 +93,7 @@ static void AddDefaultSettings_I(rdpSettings* settings, size_t idHostname, size_
 			{
 				if (!bExistPassword)
 				{
-					ULONG cch = Credential->CredentialBlobSize;
-
-					if (TargetName = ValidateString(Credential->CredentialBlob, cch))
+					if (TargetName = ValidateString(Credential->CredentialBlob, Credential->CredentialBlobSize))
 					{
 						freerdp_settings_set_string_W(settings, idPassword, TargetName);
 					}
