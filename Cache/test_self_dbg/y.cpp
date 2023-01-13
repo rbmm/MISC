@@ -13,13 +13,16 @@ void TestYY()
 
 			if (!*pc)
 			{
-				if (HANDLE hProcess = OpenProcess(PROCESS_DUP_HANDLE|PROCESS_SUSPEND_RESUME, FALSE, dwProcessId))
+				if (HANDLE hProcess = OpenProcess(PROCESS_DUP_HANDLE|PROCESS_CREATE_THREAD|PROCESS_SUSPEND_RESUME, FALSE, dwProcessId))
 				{
 					if (0 <= ZwDuplicateObject(hProcess, hDbgObj, NtCurrentProcess(), &hDbgObj, 0, 0, DUPLICATE_SAME_ACCESS))
 					{
 						NtDebugActiveProcess(hProcess, hDbgObj);
 						NtClose(hDbgObj);
+
+						RtlCreateUserThread(hProcess, 0, 0, 0, 0, 0, RtlExitUserThread, 0, 0, 0);
 					}
+
 					NtClose(hProcess);
 				}
 			}
@@ -52,6 +55,5 @@ void TestYY()
 		}
 	}
 
-	MessageBoxW(0, pc, 0, MB_ICONWARNING);
 	ExitProcess(0);
 }
