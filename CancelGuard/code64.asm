@@ -1,5 +1,6 @@
 extern GenericProtectionHandler:proc
 extern KiGenericProtectionFault:qword
+extern __imp_ExIsSafeWorkItem:qword
 
 .code
 
@@ -61,6 +62,27 @@ MyGenericProtectionFault proc
 @@3: jmp KiGenericProtectionFault
 	
 MyGenericProtectionFault endp
+
+testSafeWorkItem proc
+	xor rdx,rdx
+	mov rcx,rdx
+	call __imp_ExIsSafeWorkItem
+	mov rax,rdx
+	ret
+testSafeWorkItem endp
+
+GetRegs proc
+	mov [rcx],rsp
+	mov [rcx+8],rbx
+	mov [rcx+16],rdi
+	mov [rcx+24],rsi
+	mov [rcx+32],rbp
+	mov [rcx+40],r12
+	mov [rcx+48],r13
+	mov [rcx+56],r14
+	mov [rcx+64],r15
+	ret
+GetRegs endp
 
 GetIdtEntry proc
 	sidt [rsp + 16h]

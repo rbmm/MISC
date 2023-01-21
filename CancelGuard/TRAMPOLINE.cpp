@@ -430,7 +430,7 @@ BOOL FoundSelfMapIndex()
 	return FALSE;
 }
 
-#pragma warning(disable : 4996) // "ExAllocatePool is deprecated, use ExAllocatePool2."
+extern PRTL_PROCESS_MODULES g_ppm;
 
 NTSTATUS GetNtos(_Out_ void** ImageBase, _Out_ ULONG* ImageSize)
 {
@@ -445,7 +445,7 @@ NTSTATUS GetNtos(_Out_ void** ImageBase, _Out_ ULONG* ImageSize)
 	{
 		status = STATUS_NO_MEMORY;
 
-		if (buf = ExAllocatePool(PagedPool, cb += PAGE_SIZE))
+		if (buf = ExAllocatePool(NonPagedPool, cb += PAGE_SIZE))
 		{
 			if (0 <= (status = NtQuerySystemInformation(SystemModuleInformation, buf, cb, &cb)))
 			{
@@ -454,6 +454,10 @@ NTSTATUS GetNtos(_Out_ void** ImageBase, _Out_ ULONG* ImageSize)
 					PRTL_PROCESS_MODULE_INFORMATION Module = ppm->Modules;
 					*ImageBase = Module->ImageBase;
 					*ImageSize = Module->ImageSize;
+
+					g_ppm = ppm;
+
+					return STATUS_SUCCESS;
 				}
 			}
 

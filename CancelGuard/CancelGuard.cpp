@@ -39,6 +39,76 @@ union IdtOffset {
 
 C_ASSERT(sizeof(IdtOffset)==8);
 
+union _KPRIORITY_STATE {
+
+	/*0000*/ UCHAR AllFields;
+
+	struct {
+	/*0000*/ UCHAR Priority : 07; // 0x7f;
+	/*0000*/ UCHAR IsolationWidth : 01; // 0x80;
+	};
+	/*0001*/
+};
+
+struct _KPRCB {
+	/*0000*/ ULONG MxCsr;
+	/*0004*/ UCHAR LegacyNumber;
+	/*0005*/ UCHAR ReservedMustBeZero;
+	/*0006*/ UCHAR InterruptRequest;
+	/*0007*/ UCHAR IdleHalt;
+	/*0008*/ PKTHREAD CurrentThread;
+	/*0010*/ PKTHREAD NextThread;
+	/*0018*/ PKTHREAD IdleThread;
+	/*0020*/ UCHAR NestingLevel;
+	/*0021*/ UCHAR ClockOwner;
+	union {
+	/*0022*/ UCHAR PendingTickFlags;
+		struct {
+		/*0022*/ UCHAR PendingTick : 01; // 0x01;
+		/*0022*/ UCHAR PendingBackupTick : 01; // 0x02;
+		};
+	};
+	/*0023*/ UCHAR IdleState;
+	/*0024*/ ULONG Number;
+	/*0028*/ ULONGLONG RspBase;
+	/*0030*/ ULONGLONG PrcbLock;
+	/*0038*/ _KPRIORITY_STATE * PriorityState;
+	/*0040*/ CHAR CpuType;
+	/*0041*/ CHAR CpuID;
+	union {
+	/*0042*/ USHORT CpuStep;
+		struct {
+		/*0042*/ UCHAR CpuStepping;
+		/*0043*/ UCHAR CpuModel;
+		};
+	};
+	/*0044*/ ULONG MHz;
+	/*0048*/ ULONGLONG HalReserved[0x8];
+	/*0088*/ USHORT MinorVersion;
+	/*008a*/ USHORT MajorVersion;
+	/*008c*/ UCHAR BuildType;
+	/*008d*/ UCHAR CpuVendor;
+	/*008e*/ UCHAR LegacyCoresPerPhysicalProcessor;
+	/*008f*/ UCHAR LegacyLogicalProcessorsPerCore;
+	/*0090*/ ULONGLONG TscFrequency;
+	/*0098*/ void * TracepointLog;
+	/*00a0*/ ULONG CoresPerPhysicalProcessor;
+	/*00a4*/ ULONG LogicalProcessorsPerCore;
+	/*00a8*/ ULONGLONG PrcbPad04[0x3];
+	/*00c0*/ void * SchedulerSubNode;
+	/*00c8*/ ULONGLONG GroupSetMember;
+	/*00d0*/ UCHAR Group;
+	/*00d1*/ UCHAR GroupIndex;
+	/*00d2*/ UCHAR PrcbPad05[0x2];
+	/*00d4*/ ULONG InitialApicId;
+	/*00d8*/ ULONG ScbOffset;
+	/*00dc*/ ULONG ApicMask;
+	/*00e0*/ void * AcpiReserved;
+};
+
+C_ASSERT(FIELD_OFFSET(_KPRCB, HalReserved) + 7*sizeof(ULONGLONG) == 0x80);
+C_ASSERT(FIELD_OFFSET(_KPRCB, AcpiReserved) == 0xe0);
+
 EXTERN_C_START
 
 void XMM(UCHAR i, PVOID);
@@ -248,6 +318,34 @@ __loop:
 	return FALSE;
 }
 
+BOOLEAN IsBadDpc(_In_ PKDPC Dpc, _In_ PCSTR txt, _In_ PVOID Pc, _In_ PVOID Stack)
+{
+	switch (0xFFFF800000000000 & (ULONG_PTR)Dpc->DeferredContext)
+	{
+	case 0:
+	case 0xFFFF800000000000:
+		return FALSE;
+	}
+
+	DbgPrint("%p:%p:%p>%s(dpc=%p ctx=%p f=%p)\n", PsGetCurrentThreadId(), Pc, Stack, txt, Dpc, Dpc->DeferredContext, Dpc->DeferredRoutine);
+
+	//DoSleep();
+
+	return TRUE;
+}
+
+void checkDpc(_Inout_ PKDPC * pDpc)
+{
+	if (PKDPC Dpc = *pDpc)
+	{
+		if (!IsBadDpc(Dpc, __FUNCTION__, 0, 0))
+		{
+			DbgPrint("!! DPC=%p(%p %p)\n", Dpc, Dpc->DeferredContext, Dpc->DeferredRoutine);
+			*pDpc = 0;
+		}
+	}
+}
+
 BOOLEAN HookGenericFault(IdtOffset Handler)
 {
 	GROUP_AFFINITY Affinity {}, PreviousAffinity {}, *pPreviousAffinity = &PreviousAffinity;
@@ -274,14 +372,22 @@ BOOLEAN HookGenericFault(IdtOffset Handler)
 						DbgPrint(">> G[%x][%x.%x] %p/%p\n", 
 							i, ProcNumber.Group, ProcNumber.Number, 1ULL << ProcNumber.Number, Affinity.Mask);
 
-						_KIDTENTRY64* pidte = GetIdtEntry(13), idte_new, idte_cmp = *pidte;
+						PKPCR Pcr = KeGetPcr();
+
+						_KPRCB *Prcb = Pcr->CurrentPrcb;
+						_KIDTENTRY64* pidte = &Pcr->IdtBase[0xd], idte_new, idte_cmp = *pidte;
+
+						DbgPrint("Pcr = %p(%p)\nAcpiReserved=%p HalReserved=%p\n", Pcr, Prcb, Prcb->AcpiReserved, Prcb->HalReserved[7]);
+
+						checkDpc((PKDPC*)&Prcb->AcpiReserved);
+						checkDpc((PKDPC*)&Prcb->HalReserved[7]);
 
 						IdtOffset v;
 						v.OffsetLow = pidte->OffsetLow;
 						v.OffsetMiddle = pidte->OffsetMiddle;
 						v.OffsetHigh = pidte->OffsetHigh;
 
-						DbgPrint("int0D=%p KiGenericProtectionFault = %p [%x]\n", 
+						DbgPrint("int0D = %p KiGenericProtectionFault = %p [%x]\n", 
 							pidte, v.Value, v.Value == KiGenericProtectionFault.Value);
 
 						struct MDL_EX : MDL 
@@ -339,46 +445,24 @@ BOOLEAN HookGenericFault(IdtOffset Handler)
 
 #include "detour.h"
 
-NTSTATUS
-NTAPI
-hook_ZwOpenKey(
-			   _Out_ PHANDLE KeyHandle,
-			   _In_ ACCESS_MASK DesiredAccess,
-			   _In_ POBJECT_ATTRIBUTES ObjectAttributes
-			   )
+struct NonVRegs {
+	ULONG_PTR Rsp, Rbx, Rdi, Rsi, Rbp, R12, R13, R14, R15;
+};
+
+EXTERN_C void GetRegs(NonVRegs* p);
+
+void DoSleep()
 {
-	static LONG n = 0;
-	if (InterlockedIncrement(&n) < 16)
+	NonVRegs r;
+	GetRegs(&r);
+
+	if (KeGetCurrentIrql() < DISPATCH_LEVEL)
 	{
-		DbgPrint("%p>OpenKey(%wZ)\n", _ReturnAddress(), ObjectAttributes->ObjectName);
+		DbgPrint("!!! Sleep rsp=%p\nrbx=%p rdi=%p\nrsi=%p rbp=%p\nr12=%p r13=%p\nr14=%p r15=%p\n", 
+			r.Rsp, r.Rbx, r.Rdi, r.Rsi, r.Rbp, r.R12, r.R13, r.R14, r.R15);
+		LARGE_INTEGER li = {0, MINLONG };
+		KeDelayExecutionThread(KernelMode, FALSE, &li);
 	}
-	return ZwOpenKey(KeyHandle, DesiredAccess, ObjectAttributes);
-}
-
-BOOLEAN IsBad(_In_ PKDPC Dpc, _In_ PCSTR txt, _In_ PVOID Pc)
-{
-	switch (0xFFFF800000000000 & (ULONG_PTR)Dpc->DeferredContext)
-	{
-	case 0:
-	case 0xFFFF800000000000:
-		return FALSE;
-	}
-
-	static volatile LONG n = 0;
-	static volatile PVOID sPc = 0;
-	static volatile HANDLE tid = 0;
-	static volatile PVOID DeferredContext = 0;
-	static volatile PKDEFERRED_ROUTINE DeferredRoutine = 0;
-
-	InterlockedIncrement(&n);
-	InterlockedExchangePointer(&sPc, Pc);
-	InterlockedExchangePointer(&tid, PsGetCurrentThreadId());
-	InterlockedExchangePointer(&DeferredContext, Dpc->DeferredContext);
-	InterlockedExchangePointer((void**)&DeferredRoutine, Dpc->DeferredRoutine);
-
-	DbgPrint("%p:%p>%s(%p, %p)\n", PsGetCurrentThreadId(), Pc, txt, Dpc, Dpc->DeferredContext);
-
-	return TRUE;
 }
 
 BOOLEAN
@@ -395,28 +479,156 @@ hook_KeSetCoalescableTimer (
 
 	InterlockedIncrement(&n);
 
-	return Dpc && IsBad(Dpc, __FUNCTION__, _ReturnAddress()) ? TRUE : KeSetCoalescableTimer(Timer, DueTime, Period, TolerableDelay, Dpc);
+	if (Dpc)
+	{
+		IsBadDpc(Dpc, __FUNCTION__, _ReturnAddress(), _AddressOfReturnAddress());
+	}
+
+	return KeSetCoalescableTimer(Timer, DueTime, Period, TolerableDelay, Dpc);
 }
 
+PRTL_PROCESS_MODULES g_ppm;
+
+void CheckReturnAddress(bool bNotReturn, PVOID Pc, PVOID Stack, PCSTR func, PVOID a = 0, PVOID b = 0, PVOID c = 0, PVOID d = 0)
+{
+	if (PRTL_PROCESS_MODULES ppm = g_ppm)
+	{
+		if (ULONG NumberOfModules = ppm->NumberOfModules)
+		{
+			PRTL_PROCESS_MODULE_INFORMATION Module = ppm->Modules;
+			do 
+			{
+				if ((ULONG_PTR)Pc - (ULONG_PTR)Module->ImageBase < Module->ImageSize)
+				{
+
+					break;
+				}
+			} while (Module++, --NumberOfModules);
+
+			if (!NumberOfModules)
+			{
+				static LONG n = 0;
+
+				InterlockedIncrement(&n);
+
+				if (n < 4)
+				{
+					DbgPrint("%p:%p:%p>%s(%p %p %p %p)\n", PsGetCurrentThreadId(), Pc, Stack, func, a, b, c, d);
+
+					if (bNotReturn)
+					{
+						DoSleep();
+					}
+				}
+			}
+		}
+	}
+}
+
+NTSTATUS
+NTAPI
+hook_PsCreateSystemThread(
+						  _Out_ PHANDLE ThreadHandle,
+						  _In_ ULONG DesiredAccess,
+						  _In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+						  _In_opt_  HANDLE ProcessHandle,
+						  _Out_opt_ PCLIENT_ID ClientId,
+						  _In_ PKSTART_ROUTINE StartRoutine,
+						  _In_opt_ _When_(return >= 0, __drv_aliasesMem) PVOID StartContext
+						  )
+{
+	CheckReturnAddress(true, _ReturnAddress(), _AddressOfReturnAddress(), __FUNCTION__, StartRoutine, StartContext);
+	return PsCreateSystemThread(ThreadHandle, DesiredAccess, ObjectAttributes, ProcessHandle, ClientId, StartRoutine, StartContext);
+}
+
+VOID
+NTAPI
+hook_ExQueueWorkItem(
+				_Inout_ __drv_aliasesMem PWORK_QUEUE_ITEM WorkItem,
+				_In_ WORK_QUEUE_TYPE QueueType
+				)
+{
+	CheckReturnAddress(true, _ReturnAddress(), _AddressOfReturnAddress(), __FUNCTION__, WorkItem->WorkerRoutine, WorkItem->Parameter);
+	ExQueueWorkItem(WorkItem, QueueType);
+}
+
+VOID
+NTAPI
+hook_KeSetSystemGroupAffinityThread (
+								_In_ PGROUP_AFFINITY Affinity,
+								_Out_opt_ PGROUP_AFFINITY PreviousAffinity
+								)
+{
+	CheckReturnAddress(true, _ReturnAddress(), _AddressOfReturnAddress(), __FUNCTION__);
+	KeSetSystemGroupAffinityThread (Affinity, PreviousAffinity);
+}
+
+BOOLEAN 
+NTAPI
+hook_KeInsertQueueApc ( IN PKAPC Apc, IN PVOID Argument1, IN PVOID Argument2, IN ULONG PriorityIncrement )
+{
+	CheckReturnAddress(false, _ReturnAddress(), _AddressOfReturnAddress(), __FUNCTION__, 
+		Apc->Reserved[0], Apc->Reserved[2], Apc->NormalContext, Argument1);
+
+	return KeInsertQueueApc(Apc, Argument1, Argument2, PriorityIncrement);
+}
+
+DECLARE_T_HOOK(PsCreateSystemThread, 28);
+DECLARE_T_HOOK(KeInsertQueueApc, 16);
 DECLARE_T_HOOK(KeSetCoalescableTimer, 20);
-DECLARE_T_HOOK(ZwOpenKey, 12);
+DECLARE_T_HOOK(ExQueueWorkItem, 8);
+DECLARE_T_HOOK(KeSetSystemGroupAffinityThread, 8);
 
 T_HOOKS_BEGIN(yy)
-T_HOOK(ZwOpenKey),
+T_HOOK(PsCreateSystemThread),
+T_HOOK(KeInsertQueueApc),
+T_HOOK(ExQueueWorkItem),
 T_HOOK(KeSetCoalescableTimer),
+T_HOOK(KeSetSystemGroupAffinityThread),
 T_HOOKS_END()
 
 // -- Demo
 //////////////////////////////////////////////////////////////////////////
 
+PVOID gCallbackRegistration = 0;
+
+NTSTATUS NTAPI OnSessionNotify (
+								_In_ PVOID SessionObject,
+								_In_ PDRIVER_OBJECT IoObject,
+								_In_ IO_SESSION_EVENT Event,
+								_In_ PVOID Context,
+								_In_reads_bytes_opt_(PayloadLength) PIO_SESSION_CONNECT_INFO NotificationPayload,
+								_In_ ULONG PayloadLength
+								)
+{
+	DbgPrint("OnSessionNotify(%p %p %x %p %p %x)\n", SessionObject, IoObject, Event, Context, NotificationPayload, PayloadLength);
+	return 0;
+}
+
 void NTAPI DriverUnload(PDRIVER_OBJECT /*DriverObject*/)
 {
 	DbgPrint("DriverUnload\n");
+	if (gCallbackRegistration) IoUnregisterContainerNotification(gCallbackRegistration);
 	TrUnHookA(yy);
 	HookGenericFault(KiGenericProtectionFault);
+	if (g_ppm)
+	{
+		ExFreePool(g_ppm);
+	}
 }
 
 NTSTATUS InitRegions();
+
+#include "..\kpdb\module.h"
+
+EXTERN_C PVOID __imp_ExIsSafeWorkItem = 0;
+
+EXTERN_C
+NTKERNELAPI
+BOOLEAN NTAPI ExIsSafeWorkItem(_In_ PWORKER_THREAD_ROUTINE WorkerRoutine);
+
+EXTERN_C PVOID testSafeWorkItem();
+
 
 NTSTATUS NTAPI ep(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 {
@@ -450,6 +662,24 @@ NTSTATUS NTAPI ep(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 	{
 		TrHookA(yy);
 	}
+
+	IO_SESSION_STATE_NOTIFICATION ssn = { sizeof(ssn), 0, DriverObject, IO_SESSION_STATE_ALL_EVENTS, };
+	status = IoRegisterContainerNotification(IoSessionStateNotification, 
+		(PIO_CONTAINER_NOTIFICATION_FUNCTION)OnSessionNotify, &ssn, sizeof(ssn), &gCallbackRegistration);
+
+	//ULONG h = 0x9A57BC6B; // "ntoskrnl.exe"
+	//LoadNtModule(1, &h);
+
+	//if (__imp_ExIsSafeWorkItem = CModule::GetVaFromName("ntoskrnl.exe", "ExIsSafeWorkItem"))
+	//{
+	//	DbgPrint("ExIsSafeWorkItem = %p\n", __imp_ExIsSafeWorkItem);
+
+	//	PVOID pv = testSafeWorkItem();;
+	//	DbgPrint("SafeWorkItem = %p\n", pv);
+	//}
+
+	//PVOID pv = CModule::GetVaFromName("ntoskrnl.exe", "MmGetSessionById");
+	//DbgPrint("===%p\n", pv);
 	return STATUS_SUCCESS;
 }
 
