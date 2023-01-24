@@ -443,3 +443,74 @@
 00000504	249.05007935	MmGetSystemAddressForMdlSafe=FFFFD0002145B000	
 00000505	249.05007935	FFFFC00002033000 << 1000	
 00000506	249.05007935	DoRead=0, 0000000000001000	
+
+typedef unsigned __int64 ULONG_PTR, *PULONG_PTR;
+typedef unsigned char UCHAR, *PUCHAR;
+typedef unsigned long ULONG, *PULONG;
+
+typedef struct _PS_PROTECTION {
+    union {
+        UCHAR Level;
+        struct {
+            UCHAR Type   : 3;
+            UCHAR Audit  : 1;                  // Reserved
+            UCHAR Signer : 4;
+        };
+    };
+} PS_PROTECTION, *PPS_PROTECTION;
+
+struct EPROCESS {
+	UCHAR pad[0x87a];
+	PS_PROTECTION Protection;
+};
+
+bool PsIsProtectedProcess(void* Process)
+{
+	return reinterpret_cast<EPROCESS*>(Process)->Protection.Type != 0;
+}
+
+ULONG g_prot_ofs;
+
+bool FindProtectedBits(void* Process, int n)
+{
+	memset(Process, 0, n * sizeof(ULONG_PTR));
+	
+	union {
+		void* pv;
+		PS_PROTECTION* ps;
+		ULONG_PTR *pp;
+	};
+	
+	pv = Process;
+	
+	do {
+		
+		*pp = ~0;
+		
+		if (PsIsProtectedProcess(Process)) 
+		{
+			*pp = 0;
+			
+			n = sizeof(ULONG_PTR) / sizeof(PS_PROTECTION);
+			
+			do {
+				
+				ps->Level = ~0;
+				
+				if (PsIsProtectedProcess(Process)) {
+					
+					g_prot_ofs = (ULONG)((ULONG_PTR)ps - (ULONG_PTR)Process);
+					
+					return true;
+				}
+				
+			} while (ps++, --n);
+			
+			return false;
+		}
+		
+	} while (pp++, --n);
+	
+	return false;
+}
+
