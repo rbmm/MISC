@@ -116,7 +116,6 @@ void XMM128(UCHAR i, PVOID);
 
 IdtOffset KiGenericProtectionFault;
 void MyGenericProtectionFault();
-_KIDTENTRY64* GetIdtEntry(int i);
 
 EXTERN_C_END
 
@@ -327,7 +326,7 @@ BOOLEAN IsBadDpc(_In_ PKDPC Dpc, _In_ PCSTR txt, _In_ PVOID Pc, _In_ PVOID Stack
 		return FALSE;
 	}
 
-	DbgPrint("%p:%p:%p>%s(dpc=%p ctx=%p f=%p)\n", PsGetCurrentThreadId(), Pc, Stack, txt, Dpc, Dpc->DeferredContext, Dpc->DeferredRoutine);
+	DbgPrint("%p:%p:%p>%s => DPC=%p(%p(%p))\n", PsGetCurrentThreadId(), Pc, Stack, txt, Dpc, Dpc->DeferredRoutine, Dpc->DeferredContext);
 
 	//DoSleep();
 
@@ -338,11 +337,8 @@ void checkDpc(_Inout_ PKDPC * pDpc)
 {
 	if (PKDPC Dpc = *pDpc)
 	{
-		if (!IsBadDpc(Dpc, __FUNCTION__, 0, 0))
-		{
-			DbgPrint("!! DPC=%p(%p %p)\n", Dpc, Dpc->DeferredContext, Dpc->DeferredRoutine);
-			*pDpc = 0;
-		}
+		DbgPrint("!! DPC=%p(%p(%p))\n", Dpc, Dpc->DeferredRoutine, Dpc->DeferredContext);
+		*pDpc = 0;
 	}
 }
 
@@ -460,7 +456,7 @@ void DoSleep()
 	{
 		DbgPrint("!!! Sleep rsp=%p\nrbx=%p rdi=%p\nrsi=%p rbp=%p\nr12=%p r13=%p\nr14=%p r15=%p\n", 
 			r.Rsp, r.Rbx, r.Rdi, r.Rsi, r.Rbp, r.R12, r.R13, r.R14, r.R15);
-		LARGE_INTEGER li = {0, MINLONG };
+		LARGE_INTEGER li = { (ULONG)(-10000000*120), -1 };
 		KeDelayExecutionThread(KernelMode, FALSE, &li);
 	}
 }
@@ -479,9 +475,9 @@ hook_KeSetCoalescableTimer (
 
 	InterlockedIncrement(&n);
 
-	if (Dpc)
+	if (Dpc && IsBadDpc(Dpc, __FUNCTION__, _ReturnAddress(), _AddressOfReturnAddress()))
 	{
-		IsBadDpc(Dpc, __FUNCTION__, _ReturnAddress(), _AddressOfReturnAddress());
+		return FALSE;
 	}
 
 	return KeSetCoalescableTimer(Timer, DueTime, Period, TolerableDelay, Dpc);
@@ -541,33 +537,11 @@ hook_PsCreateSystemThread(
 	return PsCreateSystemThread(ThreadHandle, DesiredAccess, ObjectAttributes, ProcessHandle, ClientId, StartRoutine, StartContext);
 }
 
-VOID
-NTAPI
-hook_ExQueueWorkItem(
-				_Inout_ __drv_aliasesMem PWORK_QUEUE_ITEM WorkItem,
-				_In_ WORK_QUEUE_TYPE QueueType
-				)
-{
-	CheckReturnAddress(true, _ReturnAddress(), _AddressOfReturnAddress(), __FUNCTION__, WorkItem->WorkerRoutine, WorkItem->Parameter);
-	ExQueueWorkItem(WorkItem, QueueType);
-}
-
-VOID
-NTAPI
-hook_KeSetSystemGroupAffinityThread (
-								_In_ PGROUP_AFFINITY Affinity,
-								_Out_opt_ PGROUP_AFFINITY PreviousAffinity
-								)
-{
-	CheckReturnAddress(true, _ReturnAddress(), _AddressOfReturnAddress(), __FUNCTION__);
-	KeSetSystemGroupAffinityThread (Affinity, PreviousAffinity);
-}
-
 BOOLEAN 
 NTAPI
 hook_KeInsertQueueApc ( IN PKAPC Apc, IN PVOID Argument1, IN PVOID Argument2, IN ULONG PriorityIncrement )
 {
-	CheckReturnAddress(false, _ReturnAddress(), _AddressOfReturnAddress(), __FUNCTION__, 
+	CheckReturnAddress(true, _ReturnAddress(), _AddressOfReturnAddress(), __FUNCTION__, 
 		Apc->Reserved[0], Apc->Reserved[2], Apc->NormalContext, Argument1);
 
 	return KeInsertQueueApc(Apc, Argument1, Argument2, PriorityIncrement);
@@ -576,15 +550,11 @@ hook_KeInsertQueueApc ( IN PKAPC Apc, IN PVOID Argument1, IN PVOID Argument2, IN
 DECLARE_T_HOOK(PsCreateSystemThread, 28);
 DECLARE_T_HOOK(KeInsertQueueApc, 16);
 DECLARE_T_HOOK(KeSetCoalescableTimer, 20);
-DECLARE_T_HOOK(ExQueueWorkItem, 8);
-DECLARE_T_HOOK(KeSetSystemGroupAffinityThread, 8);
 
 T_HOOKS_BEGIN(yy)
 T_HOOK(PsCreateSystemThread),
 T_HOOK(KeInsertQueueApc),
-T_HOOK(ExQueueWorkItem),
 T_HOOK(KeSetCoalescableTimer),
-T_HOOK(KeSetSystemGroupAffinityThread),
 T_HOOKS_END()
 
 // -- Demo
@@ -629,6 +599,93 @@ BOOLEAN NTAPI ExIsSafeWorkItem(_In_ PWORKER_THREAD_ROUTINE WorkerRoutine);
 
 EXTERN_C PVOID testSafeWorkItem();
 
+EX_PUSH_LOCK PushLock {};
+
+VOID
+NTAPI
+InApc (
+		__in_opt PVOID StartAddress,
+		__in_opt PVOID UniqueThread,
+		__in_opt PVOID
+		)
+{
+	char sz[64];
+	sprintf_s(sz, _countof(sz), "%p>%p", UniqueThread, StartAddress);
+	KeEnterGuardedRegion();
+	ExAcquirePushLockExclusive(&PushLock);
+	DumpStack(sz);
+	ExReleasePushLockExclusive(&PushLock);
+	KeLeaveGuardedRegion();
+}
+
+VOID
+NTAPI
+KernelRoutine (
+			   __in PKAPC Apc,
+			   __deref_inout_opt PKNORMAL_ROUTINE *,
+			   __deref_inout_opt PVOID *,
+			   __deref_inout_opt PVOID *,
+			   __deref_inout_opt PVOID *
+			   )
+{
+	ExFreePool(Apc);
+}
+
+void EnumSysThreads()
+{
+	NTSTATUS status;
+
+	ULONG cb = 0x10000;
+	do 
+	{
+		status = STATUS_INSUFFICIENT_RESOURCES;
+
+		if (PVOID buf = ExAllocatePool(PagedPool, cb += PAGE_SIZE))
+		{
+			if (0 <= (status = NtQuerySystemInformation(SystemProcessInformation, buf, cb, &cb)))
+			{
+				PSYSTEM_PROCESS_INFORMATION pspi = (PSYSTEM_PROCESS_INFORMATION)buf;
+
+				ULONG NextEntryOffset = 0;
+				do 
+				{
+					(PUCHAR&)pspi += NextEntryOffset;
+					if (pspi->UniqueProcessId && !pspi->InheritedFromUniqueProcessId)
+					{
+						if (ULONG NumberOfThreads = pspi->NumberOfThreads)
+						{
+							PSYSTEM_THREAD_INFORMATION TH = pspi->TH;
+							do 
+							{
+								if (TH->ThreadState == StateWait && TH->WaitReason == Executive)
+								{
+									PETHREAD Thread;
+									if (0 <= PsLookupProcessThreadByCid(&TH->ClientId, 0, &Thread))
+									{
+										if (PKAPC Apc = (PKAPC)ExAllocatePool(NonPagedPool, sizeof(KAPC)))
+										{
+											KeInitializeApc(Apc, Thread, OriginalApcEnvironment, KernelRoutine, 0, 
+												(PKNORMAL_ROUTINE)InApc, KernelMode, TH->StartAddress);
+
+											if (!KeInsertQueueApc(Apc, TH->ClientId.UniqueThread, 0, IO_NO_INCREMENT))
+											{
+												ExFreePool(Apc);
+											}
+										}
+										ObfDereferenceObject(Thread);
+									}
+								}
+							} while (++TH, --NumberOfThreads);
+						}
+						break;
+					}
+				} while (NextEntryOffset = pspi->NextEntryOffset);
+			}
+
+			ExFreePool(buf);
+		}
+	} while (status == STATUS_INFO_LENGTH_MISMATCH);
+}
 
 NTSTATUS NTAPI ep(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 {
@@ -636,11 +693,20 @@ NTSTATUS NTAPI ep(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 	
 	if (!ExIsProcessorFeaturePresent(PF_COMPARE_EXCHANGE128)) return STATUS_NOT_IMPLEMENTED;
 
-	_KIDTENTRY64* pidte = GetIdtEntry(13);
+	struct  
+	{
+		UCHAR pad[6];
+		USHORT n;
+		_KIDTENTRY64* pidte;
+	} s;
 
-	KiGenericProtectionFault.OffsetLow = pidte->OffsetLow;
-	KiGenericProtectionFault.OffsetMiddle = pidte->OffsetMiddle;
-	KiGenericProtectionFault.OffsetHigh = pidte->OffsetHigh;
+	__sidt(&s.n);
+
+	s.pidte += 13;
+
+	KiGenericProtectionFault.OffsetLow = s.pidte->OffsetLow;
+	KiGenericProtectionFault.OffsetMiddle = s.pidte->OffsetMiddle;
+	KiGenericProtectionFault.OffsetHigh = s.pidte->OffsetHigh;
 
 	DbgPrint("KiGenericProtectionFault = %p\n", KiGenericProtectionFault.Value);
 
@@ -656,6 +722,32 @@ NTSTATUS NTAPI ep(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 		DbgPrint("TrInit = %x\n", status);
 	}
 
+	ULONG h = 0x9A57BC6B; // "ntoskrnl.exe"
+	LoadNtModule(1, &h);
+
+	if (CModule* nt = CModule::ByName("ntoskrnl.exe"))
+	{
+		if (PKDPC KiBalanceSetManagerPeriodicDpc = (PKDPC)nt->GetVaFromName("KiBalanceSetManagerPeriodicDpc"))
+		{
+			DbgPrint("KiBalanceSetManagerPeriodicDpc=%p(%p(%p))", 
+				KiBalanceSetManagerPeriodicDpc, KiBalanceSetManagerPeriodicDpc->DeferredRoutine,
+				KiBalanceSetManagerPeriodicDpc->DeferredContext);
+
+			if (PKDEFERRED_ROUTINE KiBalanceSetManagerDeferredRoutine = (PKDEFERRED_ROUTINE)nt->GetVaFromName("KiBalanceSetManagerDeferredRoutine"))
+			{
+				if (PVOID KiBalanceSetManagerPeriodicEvent = (PKDEFERRED_ROUTINE)nt->GetVaFromName("KiBalanceSetManagerPeriodicEvent"))
+				{
+					DbgPrint("%p**%p\n", KiBalanceSetManagerDeferredRoutine, KiBalanceSetManagerPeriodicEvent);
+
+					KiBalanceSetManagerPeriodicDpc->DeferredRoutine = KiBalanceSetManagerDeferredRoutine;
+					// raise!
+					KiBalanceSetManagerPeriodicDpc->DeferredContext = KiBalanceSetManagerPeriodicEvent;
+
+				}
+			}
+		}
+	}
+
 	HookGenericFault({ MyGenericProtectionFault });
 
 	if (0 <= status)
@@ -667,8 +759,6 @@ NTSTATUS NTAPI ep(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 	status = IoRegisterContainerNotification(IoSessionStateNotification, 
 		(PIO_CONTAINER_NOTIFICATION_FUNCTION)OnSessionNotify, &ssn, sizeof(ssn), &gCallbackRegistration);
 
-	//ULONG h = 0x9A57BC6B; // "ntoskrnl.exe"
-	//LoadNtModule(1, &h);
 
 	//if (__imp_ExIsSafeWorkItem = CModule::GetVaFromName("ntoskrnl.exe", "ExIsSafeWorkItem"))
 	//{
@@ -680,6 +770,7 @@ NTSTATUS NTAPI ep(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 
 	//PVOID pv = CModule::GetVaFromName("ntoskrnl.exe", "MmGetSessionById");
 	//DbgPrint("===%p\n", pv);
+	EnumSysThreads();
 	return STATUS_SUCCESS;
 }
 

@@ -84,14 +84,6 @@ GetRegs proc
 	ret
 GetRegs endp
 
-GetIdtEntry proc
-	sidt [rsp + 16h]
-	mov rax,[rsp + 18h]
-	shl rcx,4
-	add rax,rcx
-	ret
-GetIdtEntry endp
-
 MOV_XMM MACRO N
 	movq @CatStr(xmm,N),qword ptr[rdx]
 	ret
