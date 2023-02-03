@@ -2,10 +2,16 @@
 
 struct T_HOOK_ENTRY 
 {
-	void** pThunk;
-	PVOID hook;
+	_Inout_ void** pThunk;
+	// pointer on variable which hold:
+	// In: where to put the hook ( *pThunk -> func)
+	// Out: pointer to place to execute original code ( *pThunk -> trump)
+	_Inout_ PVOID hook;
+	// In: pointer to hook function. so *pThunk redirected to hook
+	// Out: original value of *pThunk ( func )
 	union Z_DETOUR_TRAMPOLINE* pTramp;
 };
+
 
 NTSTATUS NTAPI TrInit();
 
@@ -29,5 +35,3 @@ NTSTATUS NTAPI TrHook(_Inout_ void** p__imp, _In_ PVOID hook);
 #define T_HOOK(pfn) { &__imp_ ## pfn, hook_ ## pfn }
 #define T_HOOKS_END() };
 
-#define TrHookA(name) TrHook(name, _countof(name))
-#define TrUnHookA(name) TrUnHook(name, _countof(name))

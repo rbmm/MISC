@@ -67,7 +67,7 @@ NTSTATUS NTAPI TrHook(PVOID pv, T_HOOK_ENTRY* entry)
 
 			if (0 <= (status = pTramp->Set()))
 			{
-				DbgPrint("%p[%p -> %p]\n", pTramp, pThunk, pv);
+				DbgPrint("[%p -> %p(%p) -> %p]\n", pThunk, pTramp, pTramp->rbCode, pv);
 				entry->hook = pThunk;
 				entry->pTramp = pTramp;
 				return STATUS_SUCCESS;

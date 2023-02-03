@@ -483,44 +483,6 @@ hook_KeSetCoalescableTimer (
 	return KeSetCoalescableTimer(Timer, DueTime, Period, TolerableDelay, Dpc);
 }
 
-PRTL_PROCESS_MODULES g_ppm;
-
-void CheckReturnAddress(bool bNotReturn, PVOID Pc, PVOID Stack, PCSTR func, PVOID a = 0, PVOID b = 0, PVOID c = 0, PVOID d = 0)
-{
-	if (PRTL_PROCESS_MODULES ppm = g_ppm)
-	{
-		if (ULONG NumberOfModules = ppm->NumberOfModules)
-		{
-			PRTL_PROCESS_MODULE_INFORMATION Module = ppm->Modules;
-			do 
-			{
-				if ((ULONG_PTR)Pc - (ULONG_PTR)Module->ImageBase < Module->ImageSize)
-				{
-
-					break;
-				}
-			} while (Module++, --NumberOfModules);
-
-			if (!NumberOfModules)
-			{
-				static LONG n = 0;
-
-				InterlockedIncrement(&n);
-
-				if (n < 4)
-				{
-					DbgPrint("%p:%p:%p>%s(%p %p %p %p)\n", PsGetCurrentThreadId(), Pc, Stack, func, a, b, c, d);
-
-					if (bNotReturn)
-					{
-						DoSleep();
-					}
-				}
-			}
-		}
-	}
-}
-
 NTSTATUS
 NTAPI
 hook_PsCreateSystemThread(
@@ -533,18 +495,23 @@ hook_PsCreateSystemThread(
 						  _In_opt_ _When_(return >= 0, __drv_aliasesMem) PVOID StartContext
 						  )
 {
-	CheckReturnAddress(true, _ReturnAddress(), _AddressOfReturnAddress(), __FUNCTION__, StartRoutine, StartContext);
 	return PsCreateSystemThread(ThreadHandle, DesiredAccess, ObjectAttributes, ProcessHandle, ClientId, StartRoutine, StartContext);
 }
 
-BOOLEAN 
-NTAPI
-hook_KeInsertQueueApc ( IN PKAPC Apc, IN PVOID Argument1, IN PVOID Argument2, IN ULONG PriorityIncrement )
-{
-	CheckReturnAddress(true, _ReturnAddress(), _AddressOfReturnAddress(), __FUNCTION__, 
-		Apc->Reserved[0], Apc->Reserved[2], Apc->NormalContext, Argument1);
+EXTERN_C PVOID __imp_KiDispatchCallout = 0;
 
-	return KeInsertQueueApc(Apc, Argument1, Argument2, PriorityIncrement);
+VOID
+NTAPI
+hook_KiDispatchCallout (
+				 __in PKAPC Apc,
+				 __deref_inout_opt PKNORMAL_ROUTINE *NormalRoutine,
+				 __deref_inout_opt PVOID *NormalContext,
+				 __deref_inout_opt PVOID *SystemArgument1,
+				 __deref_inout_opt PVOID *SystemArgument2
+				 )
+{
+	DbgPrint("KiDispatchCallout(%p, %p, %p, %p, %p)\n", Apc, NormalRoutine, NormalContext, SystemArgument1, SystemArgument2);
+	//ExFreePool(Apc);
 }
 
 DECLARE_T_HOOK(PsCreateSystemThread, 28);
@@ -553,10 +520,10 @@ DECLARE_T_HOOK(KeSetCoalescableTimer, 20);
 
 T_HOOKS_BEGIN(yy)
 T_HOOK(PsCreateSystemThread),
-T_HOOK(KeInsertQueueApc),
 T_HOOK(KeSetCoalescableTimer),
 T_HOOKS_END()
 
+T_HOOK_ENTRY KiDisp { &__imp_KiDispatchCallout, hook_KiDispatchCallout };
 // -- Demo
 //////////////////////////////////////////////////////////////////////////
 
@@ -577,18 +544,18 @@ NTSTATUS NTAPI OnSessionNotify (
 
 void NTAPI DriverUnload(PDRIVER_OBJECT /*DriverObject*/)
 {
-	DbgPrint("DriverUnload\n");
+	DbgPrint("DriverUnload \n");
 	if (gCallbackRegistration) IoUnregisterContainerNotification(gCallbackRegistration);
-	TrUnHookA(yy);
-	HookGenericFault(KiGenericProtectionFault);
-	if (g_ppm)
+	
+	//if (__imp_KiDispatchCallout)
 	{
-		ExFreePool(g_ppm);
+		//TrUnHook(&KiDisp, 1);
 	}
+	//TrUnHook(yy, _countof(yy));
+	//HookGenericFault(KiGenericProtectionFault);
 }
 
 NTSTATUS InitRegions();
-
 #include "..\kpdb\module.h"
 
 EXTERN_C PVOID __imp_ExIsSafeWorkItem = 0;
@@ -618,17 +585,21 @@ InApc (
 	KeLeaveGuardedRegion();
 }
 
+VOID NTAPI InApc2 ( _In_opt_ PVOID , _In_opt_ PVOID pg, _In_opt_ PVOID time );
+
 VOID
 NTAPI
 KernelRoutine (
 			   __in PKAPC Apc,
-			   __deref_inout_opt PKNORMAL_ROUTINE *,
-			   __deref_inout_opt PVOID *,
-			   __deref_inout_opt PVOID *,
-			   __deref_inout_opt PVOID *
+			   __deref_inout_opt PKNORMAL_ROUTINE * ,
+			   __deref_inout_opt PVOID * Context,
+			   __deref_inout_opt PVOID *S1,
+			   __deref_inout_opt PVOID *S2
 			   )
 {
 	ExFreePool(Apc);
+	InApc2(*Context, *S1, *S2);
+	//DbgPrint("%p>KernelRoutine(%p)\n", PsGetCurrentThreadId(), Apc);
 }
 
 void EnumSysThreads()
@@ -687,7 +658,224 @@ void EnumSysThreads()
 	} while (status == STATUS_INFO_LENGTH_MISMATCH);
 }
 
-NTSTATUS NTAPI ep(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
+
+typedef NTSTATUS (NTAPI * PROCESS_ENUM_ROUTINE)(_In_ PEPROCESS Process, _In_ PVOID Context);
+typedef NTSTATUS (NTAPI * THREAD_ENUM_ROUTINE)(_In_ PEPROCESS Process, _In_ PETHREAD Thread, _In_ PVOID Context);
+
+EXTERN_C PVOID __imp_PsEnumProcesses = 0, __imp_PsEnumProcessThreads = 0;
+
+EXTERN_C
+NTKERNELAPI
+NTSTATUS
+NTAPI
+PsEnumProcesses (
+				 _In_ PROCESS_ENUM_ROUTINE CallBack,
+				 _In_ PVOID Context
+				 );
+
+EXTERN_C
+NTKERNELAPI
+NTSTATUS
+NTAPI
+PsEnumProcessThreads (
+					  _In_ PEPROCESS Process,
+					  _In_ THREAD_ENUM_ROUTINE CallBack,
+					  _In_ PVOID Context
+					  );
+
+struct TCL : CONTEXT, SLIST_ENTRY
+{
+};
+
+ULONG64 KeGetSecondCount()
+{
+	return (SharedUserData->TickCountQuad * SharedUserData->TickCountMultiplier >> 24) / 1000;
+}
+
+struct GCT 
+{
+	SLIST_HEADER ListHead;
+	KEVENT LowEvent, HighEvent;
+	LONG CtxOk = 0, CtxFail = 0, nWorks = 1;
+	ULONG dwThreadCount = 0, nInsertOk = 0, nInsertFail = 0;
+	ULONG time = (ULONG)KeGetSecondCount() + 2;
+
+	GCT()
+	{
+		InitializeSListHead(&ListHead);
+		KeInitializeEvent(&LowEvent, NotificationEvent, FALSE);
+		KeInitializeEvent(&HighEvent, NotificationEvent, FALSE);
+		DbgPrint("GCT<%p>\n", this);
+	}
+
+	void WorkReady()
+	{
+		if (!InterlockedDecrement(&nWorks))
+		{
+			DbgPrint("WorkReady (%p)\n", PsGetCurrentThreadId());
+			KeSetEvent(&LowEvent, IO_NO_INCREMENT, TRUE);
+		}
+	}
+
+	void Worker()
+	{
+		TCL Context{};
+		Context.ContextFlags = CONTEXT_CONTROL;
+		ULONG_PTR Rip = 0;
+		NTSTATUS status = PsGetContextThread(KeGetCurrentThread(), &Context, KernelMode);
+		//DbgPrint("++%p> rip=%p [%x]\n", PsGetCurrentThreadId(), Context.Rip, status);
+		if (0 <= status)
+		{
+			InterlockedIncrement(&CtxOk);
+			Rip = Context.Rip;
+			ExpInterlockedPushEntrySList(&ListHead, &Context);
+		}
+		else
+		{
+			InterlockedIncrement(&CtxFail);
+		}
+
+		WorkReady();
+
+		KeWaitForSingleObject(&HighEvent, WrExecutive, KernelMode, FALSE, 0);
+
+		if (Rip != Context.Rip)
+		{
+			if (0 > PsSetContextThread(KeGetCurrentThread(), &Context, KernelMode))
+			{
+				__debugbreak();
+			}
+
+			DbgPrint("%p> %p -> %p !!!\n", PsGetCurrentThreadId(), Rip, Context.Rip);
+		}
+		//DbgPrint("--%p> rip=%p [%x]\n", PsGetCurrentThreadId(), Context.Rip, status);
+	}
+
+	void Main()
+	{
+		WorkReady();
+		LARGE_INTEGER li = {-10000000*4,-1};
+		NTSTATUS s = KeWaitForSingleObject(&LowEvent, WrExecutive, KernelMode, FALSE, &li);
+
+		DbgPrint("Main(%p) =%x\n", PsGetCurrentThreadId(), s);
+
+		if (PSLIST_ENTRY ListEntry = FirstEntrySList(&ListHead))
+		{
+			ULONG n = 16;
+			do 
+			{
+				if (n)
+				{
+					--n;
+					DbgPrint("Rip= %p\n", static_cast<TCL*>(ListEntry)->Rip);
+				}
+				
+			} while (ListEntry = ListEntry->Next);
+		}
+
+		DbgPrint("T=%u %u/%u %u/%u\n", dwThreadCount, CtxOk, CtxFail, nInsertOk, nInsertFail);
+
+		KeSetEvent(&HighEvent, IO_NO_INCREMENT, FALSE);
+	}
+};
+
+
+void Scd()
+{
+	CONTEXT Context{};
+	Context.ContextFlags = CONTEXT_CONTROL;
+	NTSTATUS status = PsGetContextThread(KeGetCurrentThread(), &Context, KernelMode);
+	DbgPrint("++%p> rip=%p [%x]\n", PsGetCurrentThreadId(), Context.Rip, status);
+}
+
+VOID
+NTAPI
+InApc2 (
+	   _In_opt_ PVOID ,
+	   _In_opt_ PVOID pg,
+	   _In_opt_ PVOID time
+	   )
+{
+	ULONG64 t = KeGetSecondCount();
+	if (t > (ULONG_PTR)time)
+	{
+		DbgPrint("%p:%p> %p [%x] Time !! %u\n", 
+			PsGetCurrentProcessId(), PsGetCurrentThreadId(), KeGetCurrentThread(), 
+			ExGetPreviousMode(), t -= (ULONG_PTR)time);
+
+		static LONG s = 0;
+
+		if (InterlockedIncrement(&s) < 32 || t > 4)
+		{
+			char sz[32];
+			KeEnterGuardedRegion();
+			ExAcquirePushLockExclusive(&PushLock);
+			Scd();
+			sprintf_s(sz, _countof(sz), "## %p", PsGetCurrentThreadId());
+			DumpStack(sz);
+			ExReleasePushLockExclusive(&PushLock);
+			KeLeaveGuardedRegion();
+		}
+		return ;
+	}
+
+	//DbgPrint("%p>InApc2(%x)\n", PsGetCurrentThreadId(), *((PULONG)ptid));
+	reinterpret_cast<GCT*>(pg)->Worker();
+}
+
+VOID
+NTAPI
+RundownRoutine2 (_In_ PKAPC Apc)
+{
+	DbgPrint("%p> RundownRoutine2(%p)\n", PsGetCurrentThreadId(), Apc);
+	//reinterpret_cast<GCT*>(Apc->NormalContext)->Worker();
+	InApc2(Apc->NormalContext, Apc->SystemArgument1, Apc->SystemArgument2);
+	ExFreePool(Apc);
+}
+
+NTSTATUS NTAPI ThreadCB(_In_ PEPROCESS Process, _In_ PETHREAD Thread, _In_ PVOID Context)
+{
+	if (Thread != KeGetCurrentThread())
+	{
+		reinterpret_cast<GCT*>(Context)->dwThreadCount++;
+
+		if (PKAPC Apc = (PKAPC)ExAllocatePool(NonPagedPool, sizeof(KAPC)))
+		{
+			KeInitializeApc(Apc, Thread, OriginalApcEnvironment, 
+				KernelRoutine, RundownRoutine2, 0, KernelMode, 0);
+
+			InterlockedIncrementNoFence(&reinterpret_cast<GCT*>(Context)->nWorks);
+
+			if (!KeInsertQueueApc(Apc, Context, (PVOID)(ULONG_PTR)reinterpret_cast<GCT*>(Context)->time, IO_NO_INCREMENT))
+			{
+				DbgPrint("!Insert %p:%p\n", PsGetProcessId(Process), PsGetThreadId(Thread));
+				reinterpret_cast<GCT*>(Context)->nInsertFail++;
+				InterlockedDecrementNoFence(&reinterpret_cast<GCT*>(Context)->nWorks);
+				ExFreePool(Apc);
+			}
+			else
+			{
+				//DbgPrint("%p> ++%p\n", PsGetThreadId(Thread), Apc);
+				reinterpret_cast<GCT*>(Context)->nInsertOk++;
+			}
+		}
+	}
+	else
+	{
+		DbgPrint("Skip Self\n");
+	}
+
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS NTAPI ProcessCB(_In_ PEPROCESS Process, _In_ PVOID Context)
+{
+	PsEnumProcessThreads(Process, ThreadCB, Context);
+	return STATUS_SUCCESS;
+}
+
+EXTERN_C
+NTSTATUS NTAPI DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 {
 	DbgPrint("ep(%p, %wZ)", DriverObject, RegistryPath);
 	
@@ -746,18 +934,31 @@ NTSTATUS NTAPI ep(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 				}
 			}
 		}
+
+		if ((__imp_PsEnumProcesses = nt->GetVaFromName("PsEnumProcesses")) &&
+			(__imp_PsEnumProcessThreads = nt->GetVaFromName("PsEnumProcessThreads")))
+		{
+			GCT ctx;
+			PsEnumProcesses(ProcessCB, &ctx);
+			ctx.Main();
+		}
+
+		if (__imp_KiDispatchCallout = nt->GetVaFromName("KiDispatchCallout"))
+		{
+			//TrHook(&KiDisp, 1);
+		}
 	}
 
-	HookGenericFault({ MyGenericProtectionFault });
+	//HookGenericFault({ MyGenericProtectionFault });
 
 	if (0 <= status)
 	{
-		TrHookA(yy);
+		//TrHook(yy, _countof(yy));
 	}
 
-	IO_SESSION_STATE_NOTIFICATION ssn = { sizeof(ssn), 0, DriverObject, IO_SESSION_STATE_ALL_EVENTS, };
-	status = IoRegisterContainerNotification(IoSessionStateNotification, 
-		(PIO_CONTAINER_NOTIFICATION_FUNCTION)OnSessionNotify, &ssn, sizeof(ssn), &gCallbackRegistration);
+	//IO_SESSION_STATE_NOTIFICATION ssn = { sizeof(ssn), 0, DriverObject, IO_SESSION_STATE_ALL_EVENTS, };
+	//status = IoRegisterContainerNotification(IoSessionStateNotification, 
+	//	(PIO_CONTAINER_NOTIFICATION_FUNCTION)OnSessionNotify, &ssn, sizeof(ssn), &gCallbackRegistration);
 
 
 	//if (__imp_ExIsSafeWorkItem = CModule::GetVaFromName("ntoskrnl.exe", "ExIsSafeWorkItem"))
@@ -770,7 +971,7 @@ NTSTATUS NTAPI ep(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 
 	//PVOID pv = CModule::GetVaFromName("ntoskrnl.exe", "MmGetSessionById");
 	//DbgPrint("===%p\n", pv);
-	EnumSysThreads();
+	//EnumSysThreads();
 	return STATUS_SUCCESS;
 }
 

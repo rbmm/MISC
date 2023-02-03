@@ -4,109 +4,13 @@
 _NT_BEGIN
 
 #include <ntintsafe.h>
+#include "threads.h"
 #include "trampoline.h"
+#include "region.h"
 
-struct Z_DETOUR_REGION 
-{
-	friend Z_DETOUR_TRAMPOLINE;
-
-	Z_DETOUR_REGION* next;
-	PVOID BaseAddress;
-	Z_DETOUR_TRAMPOLINE* First;
-
-	inline static Z_DETOUR_REGION* spRegion = 0;
-
-	void* operator new(size_t, Z_DETOUR_REGION* This)
-	{
-		return This;
-	}
-
-	Z_DETOUR_REGION()
-	{
-	}
-
-	Z_DETOUR_REGION(Z_DETOUR_TRAMPOLINE* Next, ULONG n)
-	{
-		DbgPrint("%s<%p>(%p, %x)\n", __FUNCTION__, this, Next, n);
-
-		BaseAddress = Next;
-
-		next = spRegion, spRegion = this;
-
-		Z_DETOUR_TRAMPOLINE* Prev = 0;
-
-		do 
-		{
-			Next->Next = Prev, Prev = Next++;
-		} while (--n);
-
-		First = Prev;
-	}
-
-	Z_DETOUR_TRAMPOLINE* alloc()
-	{
-		if (Z_DETOUR_TRAMPOLINE* Next = First)
-		{
-			First = Next->Next;
-
-			return Next;
-		}
-
-		return 0;
-	}
-
-	void free(Z_DETOUR_TRAMPOLINE* Next)
-	{
-		Next->Next = First, First = Next;
-	}
-
-	static void _free(Z_DETOUR_TRAMPOLINE* pTramp)
-	{
-		if (Z_DETOUR_REGION* pRegion = spRegion)
-		{
-			do 
-			{
-				if ((ULONG_PTR)pTramp - (ULONG_PTR)pRegion->BaseAddress < 0x10000)
-				{
-					pRegion->free(pTramp);
-
-					return ;
-				}
-			} while (pRegion = pRegion->next);
-		}
-
-		__debugbreak();
-	}
-
-	static Z_DETOUR_TRAMPOLINE* _alloc(void* pvTarget)
-	{
-		if (Z_DETOUR_REGION* pRegion = spRegion)
-		{
-			do 
-			{
-				PVOID BaseAddress = pRegion->BaseAddress;
-
-				if (BaseAddress < pvTarget)
-				{
-					if ((ULONG_PTR)pvTarget - (ULONG_PTR)BaseAddress < 0x80000000 - 0x10000)
-					{
-						return pRegion->alloc();
-					}
-				}
-				else
-				{
-					if ((ULONG_PTR)BaseAddress - (ULONG_PTR)pvTarget < 0x80000000 - 0x10000)
-					{
-						return pRegion->alloc();
-					}
-				}
-
-			} while (pRegion = pRegion->next);
-		}
-
-		return 0;
-	}
-};
+#ifdef _WIN64
+C_ASSERT(sizeof(Z_DETOUR_TRAMPOLINE)==0x40);
+#endif
 
 void* Z_DETOUR_TRAMPOLINE::operator new(size_t, void* pvTarget)
 {
@@ -123,6 +27,13 @@ struct MDL_EX : MDL
 	PFN_NUMBER Pages[2];
 };
 
+enum {
+	JMP_rel32 = 0xE9,
+	JMP_rel8 = 0xEB,
+	NOP = 0x90,
+	INT3 = 0xCC,
+};
+
 NTSTATUS Z_DETOUR_TRAMPOLINE::Set()
 {
 	struct {
@@ -130,35 +41,36 @@ NTSTATUS Z_DETOUR_TRAMPOLINE::Set()
 		BYTE pad[3];
 		BYTE jmp_e9;
 		union {
-			ULONG64 rel;
+			LONG_PTR rel;
 
 			struct {
-				ULONG rel32;
+				LONG rel32;
 				USHORT fbe9; // jmp $-7
 			};
 		};
 	} j;
 
-	// first try direct jmp -> pvDetour
-	j.rel = (ULONG64)(ULONG_PTR)pvDetour - (ULONG64)((ULONG_PTR)pvJmp + 5);
+	// try jmp rel32 -> pvDetour
 
-	if (j.rel + 0x80000000 >= 0x100000000ULL)
+	j.rel = (LONG_PTR)pvDetour - ((LONG_PTR)pvJmp + SIZE_OF_JMP);
+
+#ifdef _WIN64
+	if (IsBigDelta(j.rel))
 	{
-		// try jmp -> jmp [pvDetour] in Z_DETOUR_TRAMPOLINE
+		// try jmp rel32 -> jmp [pvDetour] in Z_DETOUR_TRAMPOLINE
 
-		j.rel = (ULONG64)(ULONG_PTR)&ff25 - (ULONG64)((ULONG_PTR)pvJmp + 5);
-
-		if (j.rel + 0x80000000 >= 0x100000000ULL)
+		if (IsBigDelta(j.rel = (LONG_PTR)&ff25 - ((LONG_PTR)pvJmp + SIZE_OF_JMP)))
 		{
 			return STATUS_UNSUCCESSFUL;
 		}
 	}
+#endif
 
 #ifdef _M_IX86
 	j.fbe9 = 0xf9eb;
 #endif//#ifdef _M_IX86
 
-	j.jmp_e9 = 0xe9;
+	j.jmp_e9 = JMP_rel32;
 
 	NTSTATUS status = STATUS_INSUFFICIENT_RESOURCES;
 
@@ -202,30 +114,233 @@ NTSTATUS Z_DETOUR_TRAMPOLINE::Remove()
 	return STATUS_SUCCESS;
 }
 
+BOOL detour_does_code_end_function(PBYTE pbCode)
+{
+__0:
+	switch (pbCode[0])
+	{
+	case JMP_rel8:    // jmp +imm8
+	case JMP_rel32:    // jmp +imm32
+	case 0xe0:    // jmp eax
+	case 0xc2:    // ret +imm8
+	case 0xc3:    // ret
+		return TRUE;
+
+	case 0xf3:
+		return pbCode[1] == 0xc3;  // rep ret
+
+	case 0xff:
+		return pbCode[1] == 0x25;  // jmp [+imm32]
+
+	case 0x26:      // jmp es:
+	case 0x2e:      // jmp cs:
+	case 0x36:      // jmp ss:
+	case 0x3e:      // jmp ds:
+	case 0x64:      // jmp fs:
+	case 0x65:      // jmp gs:
+		pbCode++;
+		goto __0;
+	}
+
+	return FALSE;
+}
+
+UCHAR detour_is_code_filler(PBYTE pbCode)
+{
+	// 1-byte through 11-byte NOPs.
+
+	switch (pbCode[0])
+	{
+	case INT3: // int 3
+	case NOP: // NOP
+		return 1;
+
+#ifdef _M_IX86
+	case 0x8D:
+		switch (pbCode[1])
+		{
+		case 0x9B: // lea ebx,[ebx]
+			return pbCode[2] == 0x00 && pbCode[3] == 0x00 && pbCode[4] == 0x00 && pbCode[5] == 0x00 ? 6 : 0;
+		case 0xA4: // lea esp,[esp]
+			return pbCode[2] == 0x24 && pbCode[3] == 0x00 && 
+				pbCode[4] == 0x00 && pbCode[5] == 0x00 && pbCode[6] == 0x00 ? 7 : 0;
+		}
+		break;
+#endif//_M_IX86
+
+	case 0x66:
+		switch (pbCode[1])
+		{
+		case NOP:
+			return 2;
+
+		case 0x0F:
+			switch (pbCode[2])
+			{
+			case 0x1F:
+				switch (pbCode[3])
+				{
+				case 0x44:
+					return pbCode[4] == 0x00 && pbCode[5] == 0x00 ? 6 : 0;
+
+				case 0x84:
+					return pbCode[4] == 0x00 && pbCode[5] == 0x00 &&
+						pbCode[6] == 0x00 && pbCode[7] == 0x00 && pbCode[8] == 0x00 ? 9 : 0;
+				}
+				break;
+			}
+			break;
+
+		case 0x66:
+			switch (pbCode[2])
+			{
+			case 0x0F:
+				return pbCode[3] == 0x1F && pbCode[4] == 0x84 && pbCode[5] == 0x00 &&
+					pbCode[6] == 0x00 && pbCode[7] == 0x00 && pbCode[8] == 0x00 &&
+					pbCode[9] == 0x00 ? 10 : 0;
+
+			case 0x66:
+				return pbCode[3] == 0x0F && pbCode[4] == 0x1F && pbCode[5] == 0x84 &&
+					pbCode[6] == 0x00 && pbCode[7] == 0x00 && pbCode[8] == 0x00 &&
+					pbCode[9] == 0x00 && pbCode[10] == 0x00 ? 11 : 0;
+			}
+			break;
+		}
+		break;
+
+	case 0x0F:
+		switch (pbCode[1])
+		{
+		case 0x1F:
+			switch (pbCode[2])
+			{
+			case 0x00:
+				return 3;
+
+			case 0x40:
+				return pbCode[3] == 0x00 ? 4 : 0;
+
+			case 0x44:
+				return pbCode[3] == 0x00 && pbCode[4] == 0x00 ? 5 : 0;
+
+			case 0x80:
+				return pbCode[3] == 0x00 && pbCode[4] == 0x00 && 
+					pbCode[5] == 0x00 && pbCode[6] == 0x00 ? 7 : 0;
+
+			case 0x84:
+				return pbCode[3] == 0x00 && pbCode[4] == 0x00 && pbCode[5] == 0x00 &&
+					pbCode[6] == 0x00 && pbCode[7] == 0x00 ? 8 : 0;
+			}
+			break;
+		}
+		break;
+	}
+
+	return 0;
+}
+
+namespace {
+
+	void Adjust(ULONG n_fix, ULONG n_ext, PBYTE pbFixups[], PBYTE pbJmps[], PBYTE pbTargets[], PBYTE pbExtends[]) 
+	{
+		if (n_fix && n_ext)
+		{
+			do {
+				PBYTE pbJmp = *pbJmps++;
+				PBYTE pbTarget = *pbTargets++;
+				PBYTE pbFixup = *pbFixups++;
+
+				ULONG i = n_ext;
+				PBYTE* ppb = pbExtends;
+
+				do {
+
+					PBYTE pbExtend = *ppb++;
+					if (pbExtend < pbJmp) {
+						if (pbTarget <= pbExtend) *pbFixup -= 4; // pbTarget: .. pbExtend[+4] .. Jmp pbTarget
+					}
+					else {
+						if (pbExtend < pbTarget) *pbFixup += 4; // Jmp pbTarget .. pbExtend[+4] .. pbTarget
+					}
+				} while (--i);
+
+			} while (--n_fix);      
+		}
+	}
+}
+
 PVOID Z_DETOUR_TRAMPOLINE::Init(PVOID pvTarget)
 {
 	ldasm_data ld;
-	PBYTE code = (PBYTE)pvTarget, pDst = rbCode;
-	BYTE len, cb = 0;
-	cbRestore = 5;
+	PBYTE code = (PBYTE)pvTarget, pDst = rbCode, pbCode, JmpTarget;
+	BYTE len, cb = 0, ofs;
+	cbRestore = SIZE_OF_JMP;
+	LONG_PTR delta;
 
-#ifdef _M_IX86
-	if (code[0] == 0x8b && code[1] == 0xff && // mov edi,edi
-		((code[-1] == 0x90 && code[-2] == 0x90 && code[-3] == 0x90 && code[-4] == 0x90 && code[-5] == 0x90) || // nop
-		(code[-1] == 0xcc && code[-2] == 0xcc && code[-3] == 0xcc && code[-4] == 0xcc && code[-5] == 0xcc))) // int 3
+	BOOLEAN bMicroJmp;
+
+	ULONG n_fix = 0, n_ext = 0;
+	PBYTE pbFuxups[3];	// adresses of fixup inside trampoline
+	PBYTE pbJmps[3];	// adresses of JMP/Jcc/Loop/Jrcx
+	PBYTE pbTargets[3];	// targets  of JMP/Jcc/Loop/Jrcx
+	PBYTE pbExtends[3];	// addresses of Jcc, extended from 2 to 6 bytes
+
+__jmp:
+	switch (code[0])
 	{
-		pvJmp = code - 5;
-		pvRemain = 0;
-		cbRestore = 7;
-		memcpy(rbRestore, pvJmp, 7);
-		return code + 2;
+#ifdef _M_IX86 // never see this on x64
+case 0x8B:
+	// check for
+	//------------
+	// NOP | int 3
+	// NOP | int 3
+	// NOP | int 3
+	// NOP | int 3
+	// NOP | int 3
+	//------------
+	// mov edi,edi ; 8B FF | no trampoline used
+	if (code[1] == 0xFF)
+	{
+		switch (code[-1])
+		{
+		case NOP:
+			if (code[-2] == NOP && code[-3] == NOP && code[-4] == NOP && code[-5] == NOP)
+			{
+__np:
+				pvJmp = code - 5;
+				cbRestore = 7;
+				memcpy(rbRestore, pvJmp, 7);
+				return code + 2;
+			}
+			break;
+		case INT3:
+			if (code[-2] == INT3 && code[-3] == INT3 && code[-4] == INT3 && code[-5] == INT3)
+			{
+				goto __np;
+			}
+			break;
+		}
 	}
+	break;
 #endif//_M_IX86
+
+case JMP_rel32: // JMP rel32 | no trampoline used
+	JmpTarget = code + 5 + *(LONG*)(code + 1);
+	memcpy(rbRestore, pvTarget, 5);
+	pvJmp = pvTarget;
+	return JmpTarget;
+
+case JMP_rel8: // JMP rel8
+	JmpTarget = code + 2 + *(CHAR*)(code + 1);
+
+	code = JmpTarget, pvTarget = JmpTarget;
+
+	goto __jmp;
+	}
 
 	do 
 	{
-__0:
-		len = ldasm( code, &ld, is_x64 );
+		len = ldasm( pbCode = code, &ld, is_x64 );
 
 		if (ld.flags & F_INVALID)
 		{
@@ -234,10 +349,10 @@ __0:
 
 		memcpy(pDst, code, len);
 
+		bMicroJmp = FALSE;
+
 		if (ld.flags & F_RELATIVE)
 		{
-			LONG_PTR delta;
-
 			if (ld.flags & F_DISP)
 			{
 				if (ld.disp_size != 4)
@@ -245,14 +360,13 @@ __0:
 					return 0;
 				}
 
+				// case 1: data access relocated
 				delta = *(PLONG)(code + ld.disp_offset);
 __1:
+
 				delta += code - pDst;
 
-				if ((ULONG64)delta + 0x80000000 >= 0x100000000ULL)
-				{
-					return 0;
-				}
+				IF_BIG_DELTA(delta);
 
 				*(PLONG)(pDst + ld.disp_offset) = (LONG)delta;
 			}
@@ -264,301 +378,154 @@ __1:
 				{
 				default:
 					return 0;
+
 				case 4:
+					// case 2: JMP/Jcc rel32 relocated
 					delta = *(PLONG)(code + ld.imm_offset);
 
-					if (ld.opcd_size == 1 && opcode == 0xe9 && code == pvTarget) // jmp +imm32
-					{
-						memcpy(rbRestore, pvTarget, 5);
-
-						pvJmp = pvTarget, pvRemain = 0;
-
-						return code + len + delta;
-					}
 					ld.disp_offset = ld.imm_offset;
 					goto __1;
+
 				case 1:
 					if (ld.opcd_size != 1)
 					{
 						return 0;
 					}
 
-					delta = *(PCHAR)(code+ld.imm_offset);
+					delta = *(PCHAR)(code + ld.imm_offset);
 
-					if (opcode == 0xeb) // jmp +imm8
+					JmpTarget = code + len + delta;
+
+					if ((ULONG_PTR)(JmpTarget - (PBYTE)pvTarget) < SIZE_OF_JMP)
 					{
-						if (code == pvTarget)
+						bMicroJmp = TRUE;
+
+						pbJmps[n_fix] = code;
+						pbTargets[n_fix] = JmpTarget;
+						pbFuxups[n_fix++] = pDst + ld.imm_offset;
+					}
+
+					if (opcode == JMP_rel8) // JMP rel8
+					{
+						if (bMicroJmp)
 						{
-							pvTarget = code = code + len + delta, cb = 0;
-							goto __0;
+							// case 3:
+							break;
 						}
-						pDst[ld.opcd_offset]=0xe9;// -> jmp +imm32
+
+						// case 4: JMP rel8 (2 bytes) extended (+3 bytes) to JMP rel32 (5 bytes) inside trampoline
+						// this is end of function
+						pDst[ld.opcd_offset] = JMP_rel32;// -> JMP rel32
 
 						delta += code - pDst - 3;
 
-						if ((ULONG64)delta + 0x80000000 >= 0x100000000ULL)
-						{
-							return 0;
-						}
+						IF_BIG_DELTA(delta);
 
 						*(PLONG)(pDst + ld.imm_offset) = (LONG)delta;
 
 						pDst += 3;
+
 						break;
 					}
 
-					if (opcode - 0x70 > 0xf) // jxx
+					if (bMicroJmp)
 					{
+						// case 5:
+						break;
+					}
+
+					if (opcode - 0x70 > 0xF) // if (!Jxx)
+					{
+						// case 6: invalid target
 						return 0;
 					}
 
-					pDst[ld.opcd_offset]=0x0f;
-					pDst[ld.opcd_offset+1]=0x10+opcode;
+					// case 7: Jcc rel8 (2 bytes) extended (+4 bytes) to Jcc rel32 (6 bytes) inside trampoline
+
+					pDst[ld.opcd_offset] = 0x0F;
+					pDst[ld.opcd_offset+1] = 0x10 + opcode;
 
 					delta += code - pDst - 4;
 
-					if ((ULONG_PTR)delta + 0x80000000 >= 0x100000000UL)
-					{
-						return 0;
-					}
+					IF_BIG_DELTA(delta);
 
 					*(PLONG)(pDst + ld.imm_offset + 1) = (LONG)delta;
 
+					pbExtends[n_ext++] = code;
+
 					pDst += 4;
+
+					if ((ofs = cb + len) < SIZE_OF_JMP)
+					{
+						if (!o1)
+						{
+							o1 = ofs;
+						}
+						else if (!o2)
+						{
+							o2 = ofs;
+						}
+					}
 					break;
 				}
 			}
 		}
 
-		pDst += len;
+		code += len, pDst += len;
 
-	} while (code += len, (cb += len) < 5);
+		if (!bMicroJmp && detour_does_code_end_function(pbCode))
+		{
+			// case 8: function too small ( < 5 bytes )
 
-	pvRemain = code;
+			while ((cb += len) < SIZE_OF_JMP)
+			{
+				if (!(len = detour_is_code_filler(code)))
+				{
+					// case 9: Too few instructions !
+					return 0;
+				}
+				code += len;
+			}
 
-	*pDst++ = 0xff, *pDst++ = 0x25; // jmp [pvRemain]
+			// not need set JMP to pvAfter
+			goto __end;
+		}
 
-	ULONG delta;
+	} while ((cb += len) < SIZE_OF_JMP);
 
-#if defined(_M_X64)  
-	delta = RtlPointerToOffset(pDst + 4, &pvRemain);
-#elif defined (_M_IX86)
-	delta = (ULONG)&pvRemain;
-#else
-#error ##
-#endif
-	memcpy(pDst, &delta, sizeof(ULONG));
+	// set JMP rel32 -> pvAfter
 
-	memcpy(rbRestore, pvTarget, 5);
+	delta = (LONG_PTR)code - (LONG_PTR)(pDst + SIZE_OF_JMP);
 
-	pvJmp = pvTarget;
+	IF_BIG_DELTA(delta);
+
+	*pDst = JMP_rel32;
+	memcpy(pDst + 1, &delta, 4);
+	memcpy(rbRestore, pvTarget, SIZE_OF_JMP);
+
+__end:
+
+	pvJmp = pvTarget, pvAfter = code, cbCode = (UCHAR)(pDst - rbCode);
+
+	Adjust(n_fix, n_ext, pbFuxups, pbJmps, pbTargets, pbExtends);
 
 	return rbCode;
 }
 
-//////////////////////////////////////////////////////////////////////////
-
-#include "../inc/amd64plat.h"
-
-_PTE* GetPteAddress(_In_ ULONG_PTR p)
+void Z_DETOUR_TRAMPOLINE::Expand(_Inout_ DTA* Lens)
 {
-	_PTE* pte = PXE_X64_L(p);
-
-	if (pte->Valid)
+	ULONG len;
+	if (len = o1)
 	{
-		pte = PPE_X64_L(p);
-
-		if (pte->Valid)
-		{
-			pte = PDE_X64_L(p);
-
-			return pte->Valid && !pte->LargePage ? PTE_X64_L(p) : 0;
-		}
+		Lens->ofs1 = len;
+		Lens->add1 = 4;
 	}
 
-	return 0;
-}
-
-ULONGLONG PTE_BASE_X64, PDE_BASE_X64, PPE_BASE_X64, PXE_BASE_X64, PX_SELFMAP;
-
-#define CR3_MASK 0x000FFFFFFFFFF000
-
-BOOL FoundSelfMapIndex()
-{
-	ULONGLONG cr3 = __readcr3() & CR3_MASK;
-
-	DbgPrint("cr3=%I64x\n", cr3);
-
-	int n = 0x100;
-
-	PX_SELFMAP = PX_SELFMAP_MIN;
-
-	ULONGLONG _PX_SELFMAP = 0;
-	do 
+	if (len = o2)
 	{
-		_PTE* pte = PXE(PX_SELFMAP);
-
-		if (MmIsAddressValid(pte))
-		{
-			DbgPrint("%03x %p %I64x\n", PX_SELFMAP, pte, pte->Value);
-
-			if ((pte->Value & CR3_MASK) == cr3)
-			{
-				if (_PX_SELFMAP)
-				{
-					PX_SELFMAP = 0;
-					return FALSE;
-				}
-				else
-				{
-					_PX_SELFMAP = PX_SELFMAP;
-				}
-			}
-		}
-
-	} while (++PX_SELFMAP, --n);
-
-	if (_PX_SELFMAP)
-	{
-		INIT_PTE_CONSTS(_PX_SELFMAP);
-
-		DbgPrint("%I64x\n%I64x\n%I64x\n%I64x\n%I64x\n", PX_SELFMAP, PTE_BASE_X64, PDE_BASE_X64, PPE_BASE_X64, PXE_BASE_X64);
-
-		return TRUE;
+		Lens->ofs2 = len;
+		Lens->add2 = 4;
 	}
-
-	return FALSE;
-}
-
-extern PRTL_PROCESS_MODULES g_ppm;
-
-NTSTATUS GetNtos(_Out_ void** ImageBase, _Out_ ULONG* ImageSize)
-{
-	NTSTATUS status;
-	ULONG cb = 0x10000;
-	union {
-		PVOID buf;
-		PRTL_PROCESS_MODULES ppm;
-	};
-
-	do 
-	{
-		status = STATUS_NO_MEMORY;
-
-		if (buf = ExAllocatePool(NonPagedPool, cb += PAGE_SIZE))
-		{
-			if (0 <= (status = NtQuerySystemInformation(SystemModuleInformation, buf, cb, &cb)))
-			{
-				if (ppm->NumberOfModules)
-				{
-					PRTL_PROCESS_MODULE_INFORMATION Module = ppm->Modules;
-					*ImageBase = Module->ImageBase;
-					*ImageSize = Module->ImageSize;
-
-					g_ppm = ppm;
-
-					return STATUS_SUCCESS;
-				}
-			}
-
-			ExFreePool(buf);
-		}
-	} while (status == STATUS_INFO_LENGTH_MISMATCH);
-
-	return status;
-}
-
-#pragma bss_seg("INITKDBG")
-UCHAR gbuf[4*PAGE_SIZE];
-#pragma bss_seg()
-
-#pragma comment(linker, "/SECTION:INITKDBG,ERW!P")
-
-Z_DETOUR_REGION gdr[2];
-
-NTSTATUS InitRegions()
-{
-	PVOID ImageBase;
-	ULONG ImageSize;
-	NTSTATUS status = GetNtos(&ImageBase, &ImageSize);
-
-	DbgPrint("ntos=%p %X [%x]\n", ImageBase, ImageSize, status);
-
-	if (0 > status)
-	{
-		return status;
-	}
-
-	if (ImageBase < gbuf)
-	{
-		if ((ULONG_PTR)gbuf - (ULONG_PTR)ImageBase < 0x80000000 - sizeof(gbuf))
-		{
-__ok:
-			DbgPrint("single range !\n");
-			new(gdr) Z_DETOUR_REGION((Z_DETOUR_TRAMPOLINE*)gbuf, sizeof(gbuf) / sizeof(Z_DETOUR_TRAMPOLINE));
-			return STATUS_SUCCESS;
-		}
-	}
-	else
-	{
-		if ((ULONG_PTR)ImageBase - (ULONG_PTR)gbuf < 0x80000000 - ImageSize)
-		{
-			goto __ok;
-		}
-	}
-
-	if (FoundSelfMapIndex())
-	{
-		ULONG size;
-		if (PVOID pIAT = RtlImageDirectoryEntryToData(&__ImageBase, TRUE, IMAGE_DIRECTORY_ENTRY_IAT, &size))
-		{
-			if (_PTE* pte = GetPteAddress((ULONG_PTR)pIAT))
-			{
-				DbgPrint("iat:%p %p %p\n", pIAT, pte, pte->Value);
-			}
-		}
-
-		PIMAGE_NT_HEADERS pinth = RtlImageNtHeader(ImageBase);
-
-		if (ULONG NumberOfSections = pinth->FileHeader.NumberOfSections)
-		{
-			ULONG VirtualSize = 0;
-			ULONG_PTR VirtualAddress = 0;
-
-			PIMAGE_SECTION_HEADER pish = IMAGE_FIRST_SECTION(pinth);
-
-			do 
-			{
-				if (!memcmp(pish->Name, "INITKDBG", sizeof(pish->Name)))
-				{
-					VirtualSize = pish->Misc.VirtualSize;
-					VirtualAddress = (ULONG_PTR)ImageBase + pish->VirtualAddress;
-					break;
-				}
-			} while (pish++, --NumberOfSections);
-
-			if (VirtualSize >= PAGE_SIZE)
-			{
-				DbgPrint("INITKDBG: %p %08X\n", VirtualAddress, VirtualSize);
-
-				if (_PTE* pteFrom = GetPteAddress((ULONG_PTR)gbuf))
-				{
-					if (_PTE* pte = GetPteAddress(VirtualAddress))
-					{
-						DbgPrint("map: %p <- %p\n", pte, pteFrom);
-						pte->Value = pteFrom->Value;
-
-						new(gdr) Z_DETOUR_REGION((Z_DETOUR_TRAMPOLINE*)VirtualAddress, PAGE_SIZE / sizeof(Z_DETOUR_TRAMPOLINE));
-						new(gdr + 1) Z_DETOUR_REGION((Z_DETOUR_TRAMPOLINE*)(gbuf + PAGE_SIZE), (sizeof(gbuf) - PAGE_SIZE) / sizeof(Z_DETOUR_TRAMPOLINE));
-
-						return STATUS_SUCCESS;
-					}
-				}
-			}
-		}
-	}
-
-	return STATUS_UNSUCCESSFUL;
 }
 
 _NT_END
