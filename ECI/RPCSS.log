@@ -1,0 +1,27 @@
+ntdll.dll!ZwAlpcSendWaitReceivePort + 14
+rpcrt4.dll!virtual long LRPC_BASE_CCALL::SendReceive(_RPC_MESSAGE *) + 12e
+rpcrt4.dll!NdrpSendReceive + a3
+rpcrt4.dll!NdrpClientCall2 + 3ba
+rpcrt4.dll!NdrClientCall2 + 1f
+rpcss.dll!int CServerListEntry::CallServer(_ACTIVATION_PARAMS *,int,long *) + 3d0
+rpcss.dll!int CServerTableEntry::CallRunningServer(_ACTIVATION_PARAMS *,unsigned long,long,CClassData *,long *) + 466
+rpcss.dll!long Activation(_ACTIVATION_PARAMS *) + 4b1
+rpcss.dll!long ActivateFromProperties(IActivationPropertiesIn *,IActivationPropertiesOut * *) + 1de
+rpcss.dll!virtual long ActivationPropertiesIn::DelegateCreateInstance(IUnknown *,IActivationPropertiesOut * *) + 98
+rpcss.dll!long ActivateFromPropertiesPreamble(ActivationPropertiesIn *,IActivationPropertiesOut * *,_ACTIVATION_PARAMS *) + b96
+rpcss.dll!long PerformScmStage(tagACTIVATION_STAGE,_ACTIVATION_PARAMS *,tagMInterfacePointer *,tagMInterfacePointer * *) + 705
+rpcss.dll!_RemoteCreateInstance + 118
+rpcrt4.dll!Invoke + 73
+rpcrt4.dll!NdrStubCall2 + 38f
+rpcrt4.dll!NdrServerCall2 + 1a
+rpcrt4.dll!DispatchToStubInCNoAvrf + 24
+rpcrt4.dll!long RPC_INTERFACE::DispatchToStubWorker(_RPC_MESSAGE *,unsigned int,int,long *) + 1bd
+rpcrt4.dll!void OSF_SCALL::DispatchHelper(void) + 1b8
+rpcrt4.dll!int OSF_SCALL::ProcessReceivedPDU(rpcconn_common *,unsigned int,int) + 1dd
+rpcrt4.dll!void OSF_SCONNECTION::ProcessReceiveComplete(long,unsigned char *,unsigned int) + 410
+rpcrt4.dll!void CO_ConnectionThreadPoolCallback(_TP_CALLBACK_INSTANCE *,void *,void *,unsigned long,unsigned __int64,_TP_IO *) + 16b
+KernelBase.dll!BasepTpIoCallback + 50
+ntdll.dll!TppIopExecuteCallback + 118
+ntdll.dll!TppWorkerThread + 8ed
+kernel32.dll!BaseThreadInitThunk + 14
+ntdll.dll!RtlUserThreadStart + 21

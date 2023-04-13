@@ -1,0 +1,25 @@
+scsrv.exe!virtual long NT::ScFactory::QueryInterface(_GUID const &,void * *)
+combase.dll!static long CClassCache::GetOrLoadClass(ACTIVATION_PROPERTIES const &) + 107
+combase.dll!virtual long CObjServer::CreateInstance(IUnknown *,IActivationPropertiesIn *,IActivationPropertiesOut * *) + 341
+rpcrt4.dll!Invoke + 73
+rpcrt4.dll!NdrStubCall2 + 38f
+rpcrt4.dll!NdrStubCall3 + e3
+combase.dll!CStdStubBuffer_Invoke + 59
+combase.dll!long ObjectMethodExceptionHandlingAction<<lambda_76d9e92c799d246a4afbe64a2bf5673d> >(<lambda_76d9e92c799d246a4afbe64a2bf5673d>,ObjectMethodExceptionHandlingInfo *,ExceptionHandlingResult *,void *) + 53
+combase.dll!long DefaultStubInvoke(bool,IServerCall *,IRpcChannelBuffer *,IRpcStubBuffer *,unsigned long *) + 222
+combase.dll!virtual long ServerCall::ContextInvoke(tagRPCOLEMESSAGE *,IRpcStubBuffer *,CServerChannel *,tagIPIDEntry *,unsigned long *) + 448
+combase.dll!long AppInvoke(ServerCall *,CServerChannel *,IRpcStubBuffer *,void *,void *,tagIPIDEntry *,WireLocalThis *) + 32d
+combase.dll!long ComInvokeWithLockAndIPID(ServerCall *,tagIPIDEntry *,bool *) + 574
+combase.dll!void ThreadInvoke(_RPC_MESSAGE *) + e2c
+rpcrt4.dll!DispatchToStubInCNoAvrf + 24
+rpcrt4.dll!long RPC_INTERFACE::DispatchToStubWorker(_RPC_MESSAGE *,unsigned int,int,long *) + 1bd
+rpcrt4.dll!long RPC_INTERFACE::DispatchToStubWithObject(_RPC_MESSAGE *,RPC_UUID *,unsigned int,int,long *,RPCP_INTERFACE_GROUP *) + 15e
+rpcrt4.dll!long LRPC_SCALL::DispatchRequest(int *) + 177
+rpcrt4.dll!void LRPC_SCALL::HandleRequest(_PORT_MESSAGE *,_PORT_MESSAGE *,void *,unsigned __int64,RPCP_ALPC_HANDLE_ATTR *) + 2bc
+rpcrt4.dll!void LRPC_ADDRESS::HandleRequest(_PORT_MESSAGE *,RPCP_ALPC_MESSAGE_ATTRIBUTES *,_PORT_MESSAGE *,int) + 36c
+rpcrt4.dll!void LRPC_ADDRESS::ProcessIO(void *) + 91b
+rpcrt4.dll!void LrpcIoComplete(_TP_CALLBACK_INSTANCE *,void *,_TP_ALPC *,void *) + aa
+ntdll.dll!TppAlpcpExecuteCallback + 25e
+ntdll.dll!TppWorkerThread + 8d9
+kernel32.dll!BaseThreadInitThunk + 14
+ntdll.dll!RtlUserThreadStart + 21

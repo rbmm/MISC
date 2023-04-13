@@ -1,0 +1,28 @@
+win32u.dll!NtUserMsgWaitForMultipleObjectsEx + 14
+combase.dll!long CCliModalLoop::BlockFn(void * *,unsigned long,unsigned long *) + 12e
+combase.dll!long ModalLoop(CSyncClientCall *) + d1
+combase.dll!virtual long CSyncClientCall::SendReceive2(tagRPCOLEMESSAGE *,unsigned long *) + 956
+combase.dll!long SyncClientCallRetryContext::SendReceiveWithRetry(tagRPCOLEMESSAGE *,unsigned long *,ClientCall *,bool *) + 51
+combase.dll!long CSyncClientCall::SendReceiveInRetryContext(SyncClientCallRetryContext *,tagRPCOLEMESSAGE *,unsigned long *) + 44
+combase.dll!long ClassicSTAThreadSendReceive(CSyncClientCall *,tagRPCOLEMESSAGE *,unsigned long *) + 5d
+combase.dll!virtual long CSyncClientCall::SendReceive(tagRPCOLEMESSAGE *,unsigned long *) + 1bc
+combase.dll!virtual long CClientChannel::SendReceive(tagRPCOLEMESSAGE *,unsigned long *) + 98
+combase.dll!void NdrExtpProxySendReceive(void *,_MIDL_STUB_MESSAGE *) + 58
+rpcrt4.dll!NdrpClientCall3 + 3de
+combase.dll!ObjectStublessClient + 14c
+combase.dll!ObjectStubless + 42
+combase.dll!long CRpcResolver::DelegateActivationToSCM(bool,IActivationPropertiesIn *,IActivationPropertiesOut * *) + 5d7
+combase.dll!long CRpcResolver::CreateInstance(IActivationPropertiesIn *,IActivationPropertiesOut * *) + 1a
+combase.dll!virtual long CClientContextActivator::CreateInstance(IUnknown *,IActivationPropertiesIn *,IActivationPropertiesOut * *) + 138
+combase.dll!virtual long ActivationPropertiesIn::DelegateCreateInstance(IUnknown *,IActivationPropertiesOut * *) + 8c
+combase.dll!long ICoCreateInstanceEx(_GUID const &,IUnknown *,unsigned long,_COSERVERINFO *,unsigned long,unsigned long,tagMULTI_QI *,ActivationPropertiesIn *) + 891
+combase.dll!static long CComActivator::DoCreateInstance(_GUID const &,IUnknown *,unsigned long,_COSERVERINFO *,unsigned long,tagMULTI_QI *,ActivationPropertiesIn *) + 15e
+combase.dll!CoCreateInstanceEx + 102
+rscksp.dll!long NT::KspOpenKey(unsigned __int64,unsigned __int64 *,wchar_t const *,unsigned long,unsigned long) + 231
+ncrypt.dll!NCryptOpenKey + 17a
+crypt32.dll!int I_CryptCNGAcquireKeyContext(_CERT_CONTEXT const *,unsigned long,_CRYPT_KEY_PROV_INFO *,HWND__ *,_CERT_KEY_CONTEXT *) + 286
+crypt32.dll!IsValidExtractFileHandle + 1745b
+crypt32.dll!CryptAcquireCertificatePrivateKey + f9
+mssign32.dll!GetCryptProvFromCertEx + 71
+cryptuiwizard.dll!int CertPvkMatch(_CERT_SIGNING_INFO *,int) + d4
+cryptuiwizard.dll!__int64 Sign_Cert(HWND__ *,unsigned int,unsigned __int64,__int64) + aa2
