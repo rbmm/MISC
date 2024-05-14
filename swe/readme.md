@@ -1,5 +1,6 @@
 i try implement generic interface - task.h
 
+
 swe.dll exported 2 functions
 
 HRESULT CreateTaskMngr(_Out_ IExecTask** ppExec);
