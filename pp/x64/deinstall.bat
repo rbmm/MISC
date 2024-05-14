@@ -1,1 +1,0 @@
-sc delete MVP00
