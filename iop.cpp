@@ -1,15 +1,14 @@
 _IRQL_requires_max_(DISPATCH_LEVEL)
-NTSTATUS NTAPI IopReplaceCompletionPort(PFILE_OBJECT FileObject, PVOID Port, PVOID Key)
+NTSTATUS NTAPI IopReplaceCompletionPort(_In_ PFILE_OBJECT FileObject, _In_ PVOID Port, _In_ PVOID Key)
 {
 	NTSTATUS status = STATUS_UNSUCCESSFUL;
-	PKSPIN_LOCK IrpListLock = &FileObject->IrpListLock;
-	KIRQL irql = KeAcquireSpinLockRaiseToDpc(IrpListLock);
+	KIRQL irql = KeAcquireSpinLockRaiseToDpc(&FileObject->IrpListLock);
 	if (PIO_COMPLETION_CONTEXT CompletionContext = FileObject->CompletionContext)
 	{
-		if (IsListEmpty(&FileObject->IrpList))
+		if (IsListEmpty(&FileObject->IrpList) && !CompletionContext->UsageCount)
 		{
-			ObfDereferenceObject(CompletionContext->Port);
-			FileObject->Flags &= ~FO_SKIP_COMPLETION_PORT;
+			ObfDereferenceObjectWithTag(CompletionContext->Port, 'tlfD');
+			FileObject->Flags &= ~(FO_SKIP_COMPLETION_PORT|FO_SKIP_SET_EVENT|FO_SKIP_SET_FAST_IO);
 
 			if (Port)
 			{
@@ -21,11 +20,10 @@ NTSTATUS NTAPI IopReplaceCompletionPort(PFILE_OBJECT FileObject, PVOID Port, PVO
 			{
 				ExFreePool(CompletionContext);
 				FileObject->CompletionContext = 0;
-				FileObject->Flags |= FO_QUEUE_IRP_TO_THREAD;
 			}
 			status = STATUS_SUCCESS;
 		}
 	}
-	KeReleaseSpinLock(IrpListLock, irql);
+	KeReleaseSpinLock(&FileObject->IrpListLock, irql);
 	return status;
 }
